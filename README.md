@@ -49,17 +49,107 @@ A modelagem preditiva e a interface da plataforma **ainda não foram iniciadas**
 
 ## Variáveis e fontes de dados
 
-O conjunto consolidado nesta etapa abrange:
+Cada linha do dataset é identificada por **(município, ano, mês)**. A tabela abaixo lista todas as variáveis acordadas, organizadas por grupo temático.
 
-| Dimensão | Variáveis |
+### Geolocalização e período
+
+| Campo | Descrição |
 |---|---|
-| Epidemiológicas / assistenciais | casos prováveis e acumulados, óbitos, internações, coeficientes (incidência, prevalência, internação, letalidade) |
-| Capacidade em saúde | leitos, médicos, mortalidade materna, marcadores de gestão e vigilância |
-| Climáticas (mensal) | precipitação, temperatura, umidade, pressão atmosférica, vento |
-| Eventos extremos | seca, alagamentos, enchentes, mapeamentos de risco |
-| Socioeconômicas / infraestrutura | população estimada, PIB per capita, IDH-M, GINI, saneamento, favelas, pavimentação |
+| ID município / Nome | Código IBGE e nome do município |
+| ID Região de Saúde / Nome | Região de Saúde a que o município pertence |
+| Ano / Mês | Referência temporal da observação |
+| Porte (população total estimada) | Estimativa populacional do município no período |
 
-Fontes públicas utilizadas: **SINAN/DATASUS**, **INMET** (estações automáticas), **IBGE** (Censo, Aglomerados Subnormais, Munic), **Atlas do Desenvolvimento Humano**, **Sistema do Tesouro Nacional (CAPAG)**, **SNIS/SINISA**, **OpenDATASUS** (febre amarela), **NASA**, **CETESB** (balneabilidade, enterococos).
+### Arboviroses — Base: SINAN/DATASUS
+
+Abrange dengue, zika e chikungunya (município de **residência**).
+
+| Variável | Descrição |
+|---|---|
+| Casos acumulados | Total de casos acumulados no período |
+| Casos prováveis | Casos com classificação provável |
+| Total de óbitos | Óbitos confirmados |
+| Total de internações | Internações registradas |
+| Sexo (Masc/Fem) e quantidade de casos | Distribuição por sexo |
+| Faixa etária (descrição) e quantidade de casos | Distribuição por faixa etária |
+| Coeficiente de incidência | Casos por 100 mil habitantes |
+| Coeficiente de prevalência | Prevalência calculada |
+| Taxa de internação (%) | Internações sobre casos |
+| Taxa de letalidade (%) | Óbitos sobre casos confirmados |
+
+### Saúde — Base: DATASUS
+
+| Variável | Descrição |
+|---|---|
+| Leitos hospitalares na rede pública municipal | Disponibilidade de leitos públicos |
+| Médicos disponíveis na rede pública municipal | Disponibilidade de médicos públicos |
+| Mortalidade materna | Indicador de qualidade da atenção à saúde |
+
+### Gestão e Serviços de Vigilância — Base: IBGE MUNIC 2018
+
+| Código | Descrição |
+|---|---|
+| Msau28 | Existência do Programa de Agentes Comunitários de Saúde |
+| Msau541 | Vigilância sanitária realizada pela gestão municipal |
+| Msau542 | Vigilância epidemiológica |
+| Msau543 | Controle de endemias |
+
+### Desastres Naturais — Base: IBGE MUNIC (2020 e 2017)
+
+| Código | Descrição |
+|---|---|
+| Mgrd01 | Município atingido por seca nos últimos 4 anos |
+| Mgrd06 | Município atingido por alagamentos nos últimos 4 anos |
+| Mgrd07 | Município atingido por processo erosivo acelerado nos últimos 4 anos |
+| Mgrd08 | Município atingido por enchentes ou inundações graduais nos últimos 4 anos |
+| Mgrd11 | Município atingido por enxurradas ou inundações bruscas nos últimos 4 anos |
+| Mgrd14 | Município atingido por escorregamentos ou deslizamentos de encostas nos últimos 4 anos |
+| Mgrd201 | Existência de mapeamentos de áreas de risco de enchentes ou inundações |
+
+### Meteorológicos — Base: INMET (lag de 30 dias)
+
+Variáveis climáticas agregadas mensalmente (mínimo, média e máximo quando aplicável), associando cada município à estação meteorológica automática do INMET mais próxima por coordenadas geográficas.
+
+| Variável |
+|---|
+| Precipitação mínima / média / máxima |
+| Temperatura mínima / média / máxima |
+| Umidade relativa mínima / média / máxima |
+| Pressão atmosférica média |
+| Velocidade média do vento |
+
+### Socioeconômico — Bases: IBGE, Atlas IDH-M, CAPAG (STN), DATASUS
+
+| Variável | Fonte |
+|---|---|
+| PIB per capita do município | IBGE |
+| Índice de Desenvolvimento Humano Municipal (IDH-M) | Atlas do Desenvolvimento Humano no Brasil |
+| Capacidade de pagamento dos municípios (CAPAG) | Sistema do Tesouro Nacional |
+| Índice de GINI da renda domiciliar per capita | DATASUS |
+
+### Água e Esgoto — Base: SNIS / SINISA
+
+> Dados de 2023 liberados; 2024 e 2025 ainda não disponibilizados pelo SINISA.
+
+| Código | Descrição |
+|---|---|
+| IAG0001 | Atendimento da população total com rede de abastecimento de água (%) |
+| IES0001 | Atendimento da população total com rede coletora de esgoto (%) |
+| IES2004 | Esgoto tratado referido ao esgoto coletado (%) |
+
+### Habitação — Bases: IBGE Aglomerados Subnormais, IBGE 2022, IBGE 2020
+
+| Variável | Descrição |
+|---|---|
+| População vivendo em favelas | Estimativa populacional em aglomerados subnormais |
+| Número de favelas e comunidades urbanas | Contagem de aglomerados subnormais |
+| MMAM2612 | Existência de moradia em situação de risco ambiental |
+
+### Urbanização — Base: SINISA 2024
+
+| Código | Descrição |
+|---|---|
+| IAP0001 | Parcela de vias públicas pavimentadas na área urbana (%) |
 
 ## Estrutura do repositório
 
