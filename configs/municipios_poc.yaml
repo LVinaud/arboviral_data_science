@@ -1,0 +1,37 @@
+# Municípios da prova de conceito (POC) — 32 municípios do estado de SP.
+# Selecionados por cobrirem capitais regionais e diferentes portes populacionais.
+# Editar quando expandir para todos os municípios do estado.
+
+municipios:
+  - {cod_ibge: 355030, nome: "São Paulo"}
+  - {cod_ibge: 353060, nome: "Mogi das Cruzes"}
+  - {cod_ibge: 352850, nome: "Mairiporã"}
+  - {cod_ibge: 351510, nome: "Embu-Guaçu"}
+  - {cod_ibge: 350950, nome: "Campinas"}
+  - {cod_ibge: 353870, nome: "Piracicaba"}
+  - {cod_ibge: 350190, nome: "Amparo"}
+  - {cod_ibge: 354850, nome: "Santos"}
+  - {cod_ibge: 351870, nome: "Guarujá"}
+  - {cod_ibge: 352210, nome: "Itanhaém"}
+  - {cod_ibge: 355220, nome: "Sorocaba"}
+  - {cod_ibge: 352230, nome: "Itapetininga"}
+  - {cod_ibge: 355400, nome: "Tatuí"}
+  - {cod_ibge: 354990, nome: "São José dos Campos"}
+  - {cod_ibge: 355410, nome: "Taubaté"}
+  - {cod_ibge: 355480, nome: "Tremembé"}
+  - {cod_ibge: 354340, nome: "Ribeirão Preto"}
+  - {cod_ibge: 351620, nome: "Franca"}
+  - {cod_ibge: 350590, nome: "Batatais"}
+  - {cod_ibge: 354980, nome: "São José do Rio Preto"}
+  - {cod_ibge: 351110, nome: "Catanduva"}
+  - {cod_ibge: 353030, nome: "Mirassol"}
+  - {cod_ibge: 350600, nome: "Bauru"}
+  - {cod_ibge: 352900, nome: "Marília"}
+  - {cod_ibge: 352710, nome: "Lins"}
+  - {cod_ibge: 354140, nome: "Presidente Prudente"}
+  - {cod_ibge: 351440, nome: "Dracena"}
+  - {cod_ibge: 355430, nome: "Teodoro Sampaio"}
+  - {cod_ibge: 350280, nome: "Araçatuba"}
+  - {cod_ibge: 350650, nome: "Birigui"}
+  - {cod_ibge: 350210, nome: "Andradina"}
+  - {cod_ibge: 354890, nome: "São Carlos"}

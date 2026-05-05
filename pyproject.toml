@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arboviral"
+version = "0.1.0"
+description = "Pipeline de dados e modelagem para previsão de surtos de arboviroses em municípios de SP"
+requires-python = ">=3.10"
+authors = [{name = "Lázaro Pereira Vinaud Neto"}]
+license = {file = "LICENSE"}
+dependencies = [
+    "pandas>=2.0",
+    "pyarrow>=15",
+    "openpyxl>=3.1",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.3",
+    "xgboost>=2.0",
+    "lightgbm>=4.0",
+    "shap>=0.44",
+    "matplotlib>=3.7",
+    "seaborn>=0.13",
+    "jupyter>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ruff>=0.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,5 +1,12 @@
 contexto/
 
+# data: tudo que é gerado ou baixado fica fora do git.
+# data/lookup/ é versionada (tabelas pequenas e estáveis).
+data/raw/
+data/interim/
+data/processed/
+data/manual/
+
 __pycache__/
 *.py[cod]
 *$py.class

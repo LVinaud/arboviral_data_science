@@ -157,18 +157,52 @@ Variáveis climáticas agregadas mensalmente (mínimo, média e máximo quando a
 arboviral_data_science/
 ├── README.md
 ├── LICENSE
-└── contexto/                    # material legado anterior à criação deste repo
-    ├── Relatório Parcial - Arboviroses.pdf
-    └── IC - ARBOVIROSES-.../    # dump do Drive compartilhado
-        ├── Colabs/              # 16 notebooks (pipeline de dados)
-        ├── Csvs Brutos/         # dados-fonte (SINAN, INMET, MUNIC, Febre Amarela)
-        ├── Csvs Filtrados/      # dengue por ano em Parquet
-        ├── Dicionários de Dados/
-        ├── Gráficos/            # análises exploratórias (geral + por cidade)
-        └── Dados para inserção no BD/
+├── pyproject.toml               # dependências e metadados do pacote
+├── configs/                     # contratos do projeto
+│   ├── schema.yaml              # esquema canônico do dataset município–mês
+│   ├── municipios_poc.yaml      # 32 municípios da POC
+│   └── outbreak_label.yaml      # definição operacional do rótulo de surto
+├── data/                        # local, fora do git (exceto lookup/)
+│   ├── raw/                     # arquivos baixados manualmente, por fonte
+│   ├── interim/                 # 1 parquet por fonte (saída de src/arboviral/ingestion)
+│   ├── processed/               # municipio_mes.parquet (saída do build_master)
+│   ├── manual/                  # planilhas editadas à mão
+│   └── lookup/                  # tabelas pequenas versionadas (município↔estação INMET, etc.)
+├── src/arboviral/
+│   ├── io.py                    # caminhos canônicos
+│   ├── ingestion/               # 1 módulo por fonte: sinan, inmet, munic, saude, ibge,
+│   │                            # socioeconomico, snis, habitacao
+│   ├── transform/               # build_master.py — junta os parquets intermediários
+│   ├── features/                # lags, médias móveis, normalizações
+│   ├── labels/                  # rótulo de surto
+│   ├── models/                  # baselines, RF, XGBoost, LightGBM
+│   └── evaluation/              # split temporal, métricas, SHAP
+├── notebooks/                   # exploração e prototipagem
+├── tests/                       # smoke tests e validação de schema
+└── contexto/                    # material legado (Drive, relatório PDF) — gitignored
 ```
 
-A estrutura de diretórios para código de modelagem e plataforma será definida nas próximas etapas.
+> A plataforma web vive em repositório separado (`arboviral_platform`, ainda não criado).
+
+## Como começar
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+Depois, baixe os arquivos brutos para `data/raw/<fonte>/` e rode a ingestão correspondente:
+
+```bash
+python -m arboviral.ingestion.sinan          # ou inmet, munic, saude, ibge, ...
+python -m arboviral.transform.build_master   # consolida tudo
+```
+
+O dataset final é gravado em `data/processed/municipio_mes.parquet`.
+
+Cada módulo em `src/arboviral/ingestion/` tem um docstring no topo descrevendo
+quais arquivos espera em `data/raw/<fonte>/` e quais colunas produz.
 
 ## Referências principais
 

@@ -1,0 +1,121 @@
+# Esquema canônico do dataset município–mês.
+# Este arquivo é o contrato entre as ingestões e o pipeline de modelagem.
+# Toda variável precisa ter: nome canônico em snake_case, tipo, fonte e periodicidade.
+
+chaves:
+  cod_ibge:
+    tipo: int
+    descricao: Código IBGE do município (7 dígitos)
+  ano:
+    tipo: int
+  mes:
+    tipo: int
+    range: [1, 12]
+
+geolocalizacao:
+  periodicidade: estatica
+  variaveis:
+    nome_municipio: {tipo: str}
+    cod_regiao_saude: {tipo: int}
+    nome_regiao_saude: {tipo: str}
+
+porte:
+  fonte: ibge
+  periodicidade: anual
+  variaveis:
+    populacao_estimada: {tipo: int}
+
+arboviroses:
+  fonte: sinan_datasus
+  periodicidade: mensal
+  observacao: município de RESIDÊNCIA (não de notificação). Replicar o bloco para zika e chikungunya quando disponíveis.
+  variaveis:
+    casos_acumulados: {tipo: int}
+    casos_provaveis: {tipo: int}
+    obitos_total: {tipo: int}
+    internacoes_total: {tipo: int}
+    sexo_predominante: {tipo: categoria, valores: [Masc, Fem, Empate]}
+    sexo_qde_casos: {tipo: int}
+    faixa_etaria_predominante: {tipo: categoria}
+    faixa_etaria_qde_casos: {tipo: int}
+    coef_incidencia: {tipo: float, descricao: "casos por 100 mil hab."}
+    coef_prevalencia: {tipo: float}
+    taxa_internacao_pct: {tipo: float}
+    taxa_letalidade_pct: {tipo: float}
+
+saude:
+  fonte: datasus
+  periodicidade: mensal
+  variaveis:
+    leitos_publicos: {tipo: int, descricao: "leitos hospitalares na rede pública municipal"}
+    medicos_publicos: {tipo: int}
+    mortalidade_materna: {tipo: float}
+
+gestao_vigilancia:
+  fonte: ibge_munic_2018
+  periodicidade: estatica
+  variaveis:
+    msau28_pacs: {tipo: bool, descricao: "Programa de Agentes Comunitários de Saúde — existência"}
+    msau541_vig_sanitaria: {tipo: bool}
+    msau542_vig_epidemiologica: {tipo: bool}
+    msau543_controle_endemias: {tipo: bool}
+
+desastres_naturais:
+  fonte: ibge_munic_2020_2017
+  periodicidade: estatica
+  variaveis:
+    mgrd01_seca: {tipo: bool, descricao: "atingido por seca nos últimos 4 anos"}
+    mgrd06_alagamento: {tipo: bool}
+    mgrd07_erosao: {tipo: bool}
+    mgrd08_enchente_gradual: {tipo: bool}
+    mgrd11_enxurrada: {tipo: bool}
+    mgrd14_deslizamento: {tipo: bool}
+    mgrd201_mapeamento_risco: {tipo: bool, descricao: "existência de mapeamentos de áreas de risco de enchentes/inundações"}
+
+meteorologia:
+  fonte: inmet
+  periodicidade: mensal
+  observacao: associar município à estação automática INMET mais próxima por coordenadas; lag de 30 dias considerado na modelagem.
+  variaveis:
+    precip_min: {tipo: float}
+    precip_media: {tipo: float}
+    precip_max: {tipo: float}
+    temp_min: {tipo: float}
+    temp_media: {tipo: float}
+    temp_max: {tipo: float}
+    umid_min: {tipo: float}
+    umid_media: {tipo: float}
+    umid_max: {tipo: float}
+    pressao_media: {tipo: float}
+    vento_media: {tipo: float}
+
+socioeconomico:
+  periodicidade: anual
+  variaveis:
+    pib_per_capita: {tipo: float, fonte: ibge}
+    idhm: {tipo: float, fonte: atlas_idh}
+    capag: {tipo: categoria, valores: [A, B, C, "n.d."], fonte: stn_capag}
+    gini: {tipo: float, fonte: datasus}
+
+agua_esgoto:
+  fonte: snis_sinisa
+  periodicidade: anual
+  observacao: dados de 2023 liberados em 2022; 2024 e 2025 ainda não disponíveis pelo SINISA.
+  variaveis:
+    iag0001_atend_agua_pct: {tipo: float, descricao: "atendimento da população total com rede de abastecimento de água (%)"}
+    ies0001_atend_esgoto_pct: {tipo: float, descricao: "atendimento da população total com rede coletora de esgoto (%)"}
+    ies2004_esgoto_tratado_pct: {tipo: float, descricao: "esgoto tratado referido ao esgoto coletado (%)"}
+
+habitacao:
+  fonte: ibge_aglomerados_subnormais
+  periodicidade: anual
+  variaveis:
+    pop_favelas: {tipo: int}
+    num_favelas: {tipo: int}
+    mmam2612_moradia_risco: {tipo: bool, descricao: "existência de moradia em situação de risco ambiental"}
+
+urbanizacao:
+  fonte: sinisa_2024
+  periodicidade: anual
+  variaveis:
+    iap0001_vias_pavimentadas_pct: {tipo: float, descricao: "parcela de vias públicas pavimentadas — área urbana (%)"}

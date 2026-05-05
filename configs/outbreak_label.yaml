@@ -1,0 +1,17 @@
+# Definição operacional do rótulo de surto.
+# A definição final está em validação com a equipe — este arquivo é o ponto único
+# onde a regra fica registrada, para que a etapa de modelagem leia daqui.
+
+definicao_atual: incidencia_mensal_acima_limiar
+
+incidencia_mensal_acima_limiar:
+  descricao: |
+    Mês t é classificado como surto se a incidência mensal por 100 mil habitantes
+    no município ultrapassa um limiar fixo. Simples, transparente e fácil de
+    explicar para gestores. Limite ainda a definir.
+  limiar_por_100k: null  # TODO: definir com a equipe
+
+alternativas_a_avaliar:
+  - quantil_historico_municipal      # ex.: percentil 90 do próprio município nos últimos 5 anos
+  - desvios_acima_baseline_sazonal   # comparar com a média do mesmo mês em anos anteriores
+  - regra_diretrizes_ms              # alinhar à regra do Ministério da Saúde, se aplicável
