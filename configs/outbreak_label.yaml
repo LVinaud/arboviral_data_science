@@ -1,17 +1,57 @@
-# Definição operacional do rótulo de surto.
-# A definição final está em validação com a equipe — este arquivo é o ponto único
-# onde a regra fica registrada, para que a etapa de modelagem leia daqui.
+# Configuração das definições operacionais de surto (RQ4).
+#
+# 4 rótulos binários são calculados em paralelo para cada doença, permitindo
+# análise de sensibilidade do desempenho preditivo à escolha da definição.
+# Concordância par a par entre definições é medida com Cohen's kappa.
+#
+# Implementação: src/arboviral/labels/outbreak.py
+# Saída: data/processed/labels.parquet
 
-definicao_atual: incidencia_mensal_acima_limiar
+doencas:
+  - dengue
+  - zika
+  - chikungunya
+  - febre_amarela
 
-incidencia_mensal_acima_limiar:
-  descricao: |
-    Mês t é classificado como surto se a incidência mensal por 100 mil habitantes
-    no município ultrapassa um limiar fixo. Simples, transparente e fácil de
-    explicar para gestores. Limite ainda a definir.
-  limiar_por_100k: null  # TODO: definir com a equipe
+# Anos epidêmicos a EXCLUIR do baseline (canal endêmico e Z-score).
+# Critério: anos com incidência estadual destoante do "normal" da série,
+# identificados por inspeção visual da distribuição histórica (ver auditoria).
+# Os labels SÃO calculados para esses anos — apenas o baseline é construído
+# sem eles, para evitar viés.
+anos_epidemicos:
+  dengue:        [2015, 2019, 2024, 2025]
+  chikungunya:   [2021, 2024, 2025]
+  zika:          [2016]                       # único pico — limita uso do canal endêmico
+  febre_amarela: [2017, 2018, 2019, 2025]    # epidemia silvestre 2017-19, ressurgência 2025
 
-alternativas_a_avaliar:
-  - quantil_historico_municipal      # ex.: percentil 90 do próprio município nos últimos 5 anos
-  - desvios_acima_baseline_sazonal   # comparar com a média do mesmo mês em anos anteriores
-  - regra_diretrizes_ms              # alinhar à regra do Ministério da Saúde, se aplicável
+# Janela do baseline: "fixa" usa todos os anos não-epidêmicos da série como um
+# único conjunto. Alternativa "expansiva" (rolling) foi rejeitada porque o
+# dataset começa em 2015 — não há baseline pré-2015 disponível.
+baseline:
+  janela: fixa
+
+# === L1. Canal endêmico (método oficial Min. Saúde) ===
+# Para cada (município, mês), o limiar é mediana + 1.96·σ da distribuição
+# histórica daquele mês nos anos baseline. Surto se casos > limiar.
+canal_endemico:
+  estatistica: median_plus_1_96_sigma
+
+# === L2. Z-score relativo ===
+# Z = (casos_atual − media_baseline) / std_baseline. Surto se Z > 2.
+# Quando std=0 (baseline constante), surto declarado se casos > média_baseline.
+z_score:
+  threshold: 2.0
+
+# === L3, L4. Limiares brutos de incidência ===
+# incidência = casos_mes / populacao_estimada * 100_000
+limiares_brutos_por_100k:
+  baixo: 100
+  alto:  300
+
+# Mínimo absoluto de casos exigido para declarar surto (em qualquer definição).
+# Evita que município pequeno com 1 caso isolado seja classificado como surto
+# só porque a mediana baseline é 0. Aplicado como AND com o critério principal.
+# Valor padrão = 5 casos: empírico, alinhado a práticas comuns de vigilância
+# em arboviroses no Brasil. Configurável; impacto pode ser explorado como
+# sensitivity analysis adicional.
+casos_minimos_absolutos: 5

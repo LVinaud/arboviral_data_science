@@ -62,17 +62,33 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 - *População 2024–2025*: forward-fill a partir das estimativas IBGE de 2023 (IBGE só publica até 2023). Alternativa rejeitada: ajustar modelo de tendência populacional. Forward-fill foi escolhida por simplicidade e por ser conservadora — variação populacional municipal anual é tipicamente <2%, dentro da margem de erro da própria estimativa do IBGE.
 - *Febre amarela*: agrega por município de Local Provável de Infecção (LPI), não residência (transmissão silvestre).
 
+### Rótulos de surto — concluído
+
+`src/arboviral/labels/build_labels.py` gera `data/processed/labels.parquet`:
+
+- **85.140 linhas × 23 colunas**: chave + 4 doenças × (1 incidência auxiliar + 4 labels binários)
+- Configuração centralizada em [`configs/outbreak_label.yaml`](configs/outbreak_label.yaml) (anos epidêmicos por doença, parâmetros das 4 definições, mínimo absoluto de casos)
+- Entry point imprime taxa de positivos por (doença × definição) e Cohen's kappa par a par
+
+**Taxa de positivos observada (% de surtos no dataset):**
+
+| Doença | L1 canal | L2 zscore | L3 inc100 | L4 inc300 |
+|---|---:|---:|---:|---:|
+| Dengue | 16.21% | 13.38% | 21.12% | 11.79% |
+| Chikungunya | 1.76% | 1.59% | 0.38% | 0.14% |
+| Zika | 0.60% | 0.53% | 0.04% | 0.01% |
+| Febre amarela | 0.03% | 0.03% | 0.00% | 0.00% |
+
+**Concordância entre definições (Cohen's kappa) — primeiros achados (RQ4):**
+- L1 (canal) vs L2 (z-score): κ > 0.88 em todas as doenças → são definições praticamente equivalentes
+- Dengue: L3 vs L4 (κ=0.67) e L1 vs L3 (κ=0.52) capturam fenômenos parcialmente distintos
+- Zika e FA: definições estatísticas degeneram (baseline ≈ 0) e ficam essencialmente equivalentes a "qualquer caso ≥ 5"
+- Implicação: para dengue, comparar todas as definições é informativo; para FA, modelagem clássica é inviável e isso por si só é um achado
+
 ### Próximas etapas
 
-1. **Rótulos de surto (múltiplas definições).** Calcular quatro alvos binários para sensitivity analysis (RQ4):
-   - L1: canal endêmico (mediana + 1.96·σ histórico, por município/mês)
-   - L2: Z-score relativo (Z > 2 sobre a distribuição histórica)
-   - L3: limiar bruto baixo (≥ 100 casos / 100 mil hab)
-   - L4: limiar bruto alto (≥ 300 casos / 100 mil hab)
-   - Trabalho futuro: L5 — Moving Epidemic Method (MEM, requer ponte com R)
-   - Análise complementar: concordância entre definições via Cohen's kappa par a par
-2. **Modelagem.** Para cada um dos 4 rótulos, treinar Random Forest, XGBoost e LightGBM contra baselines de persistência, sob validação temporal (*expanding window*) com métricas AUPRC, F1, sensibilidade e especificidade.
-3. **Plataforma.** Interface integrada à inteli.gente com explicabilidade via SHAP.
+1. **Modelagem.** Para cada um dos 4 rótulos, treinar Random Forest, XGBoost e LightGBM contra baselines de persistência, sob validação temporal (*expanding window*) com métricas AUPRC, F1, sensibilidade e especificidade. MEM (L5) fica como trabalho futuro pela necessidade de ponte com R.
+2. **Plataforma.** Interface integrada à inteli.gente com explicabilidade via SHAP.
 
 ## Variáveis e fontes de dados
 

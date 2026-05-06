@@ -363,17 +363,84 @@ DECISÕES METODOLÓGICAS DOCUMENTADAS:
    ou de turismo). Manter o LPI é metodologicamente correto para o objetivo
    de identificar áreas de risco de transmissão.
 
-3. Cohen's kappa entre definições de surto (futuro):
-   Após implementar L1-L4 (canal endêmico, Z-score, limiar 100/100k, limiar
-   300/100k), calcular concordância par a par para responder RQ4.
+3. Cohen's kappa entre definições de surto:
+   Implementado em src/arboviral/labels/build_labels.py. Resultados:
+
+   TAXA DE POSITIVOS POR (DOENÇA × DEFINIÇÃO):
+                       L1 canal   L2 zscore   L3 inc100   L4 inc300
+     dengue              16.21%      13.38%      21.12%      11.79%
+     zika                 0.60%       0.53%       0.04%       0.01%
+     chikungunya          1.76%       1.59%       0.38%       0.14%
+     febre_amarela        0.03%       0.03%       0.00%       0.00%
+
+   CONCORDÂNCIA ENTRE DEFINIÇÕES (κ par a par):
+     dengue:        L1↔L2: 0.886 | L1↔L3: 0.520 | L3↔L4: 0.666
+     zika:          L1↔L2: 0.937 | L1↔L3: 0.118 (definição estatística degenera)
+     chikungunya:   L1↔L2: 0.944 | L1↔L3: 0.345 | L1↔L4: 0.143
+     febre_amarela: L1↔L2: 1.000 | L1↔L4: 0.000 (zero positivos em L3 e L4)
+
+   ACHADOS PRELIMINARES (RQ4):
+   (a) L1 (canal endêmico) e L2 (Z-score) são praticamente equivalentes em todas
+       as doenças — escolher entre elas é detalhe metodológico. Faz sentido:
+       ambas usam mediana/média + dispersão da distribuição histórica.
+   (b) Para dengue, L3 e L4 capturam fenômenos parcialmente distintos das
+       definições estatísticas. Pode haver predições com performance diferente
+       entre L1/L2 e L3/L4 — isso responde diretamente à RQ4.
+   (c) Para zika e febre amarela, baseline é praticamente zero (raridade), então
+       L1/L2 viram "qualquer caso ≥ casos_min". Modelagem clássica é difícil mas
+       não inviável — pode-se usar limiar de probabilidade muito baixo na predição.
+   (d) Para febre amarela, L3 e L4 são sempre zero (raridade absoluta). Restam
+       apenas L1/L2 para essa doença.
+
+================================================================================
+RÓTULOS DE SURTO — labels.parquet
+================================================================================
+
+Gerado por: src/arboviral/labels/build_labels.py
+Configuração: configs/outbreak_label.yaml (anos epidêmicos, parâmetros, mínimo abs)
+Saída: data/processed/labels.parquet (gitignored — derivado do master)
+Shape: 85.140 linhas × 23 colunas
+Chave: (cod_ibge, ano, mes)
+
+POR DOENÇA (4 doenças × 5 colunas = 20 colunas + 3 chaves):
+  {doenca}_incid_100k    incidência mensal/100k hab (transparência, não é label)
+  {doenca}_surto_canal   L1: canal endêmico (mediana + 1.96·σ histórico)
+  {doenca}_surto_zscore  L2: Z-score relativo (Z > 2 sobre baseline)
+  {doenca}_surto_inc100  L3: incidência ≥ 100/100k hab
+  {doenca}_surto_inc300  L4: incidência ≥ 300/100k hab
+
+DECISÕES DE DESIGN (também em configs/outbreak_label.yaml):
+
+(a) Anos epidêmicos excluídos do baseline (por inspeção da incidência estadual):
+    dengue:        2015, 2019, 2024, 2025
+    chikungunya:   2021, 2024, 2025
+    zika:          2016 (único pico — definição relativa fica degenerada)
+    febre_amarela: 2017, 2018, 2019, 2025
+
+(b) Janela do baseline = FIXA (anos não-epidêmicos da série completa, não rolling).
+    Justificativa: dataset começa em 2015, sem baseline pré-série disponível.
+    Trade-off: a janela fixa usa "futuro" para construir baseline de anos antigos
+    (não é problema porque labels são alvo, não predição).
+
+(c) Mínimo absoluto de casos = 5 (configurável). Aplicado como AND em todas as
+    definições para evitar surto de 1 caso isolado em município pequeno virar
+    positivo só porque mediana baseline = 0. Empírico, alinhado com práticas
+    comuns de vigilância em arboviroses.
+
+(d) NaN em casos é tratado como 0 (ausência de registro = sem casos notificados).
 
 ================================================================================
 PRÓXIMOS PASSOS
 ================================================================================
 
-1. Definir e calcular o rótulo de surto (limiar de incidência por 100k hab).
+1. Modelagem: Random Forest, XGBoost, LightGBM com validação temporal expanding
+   window. Para cada doença, treinar 4 modelos (um por definição) e comparar
+   AUPRC/F1/sensibilidade/especificidade. Discutir trade-offs por definição (RQ4).
 
-2. Modelagem: Random Forest, XGBoost, LightGBM com validação temporal.
+2. Análise de features: SHAP para identificar drivers principais por doença
+   (RQ2). Avaliar lags de clima e casos.
 
-3. Plataforma: interface integrada à inteli.gente com explicabilidade via SHAP.
+3. MEM (L5) como trabalho futuro — requer ponte com R.
+
+4. Plataforma: interface integrada à inteli.gente com explicabilidade.
 ================================================================================
