@@ -1,27 +1,132 @@
 """
 Consolida os parquets intermediários no dataset canônico município–mês.
 
-Estratégia:
-    1. Carrega todos os parquets de data/interim/.
-2. Faz merge sequencial sobre as chaves apropriadas:
-       - mensal:   (cod_ibge, ano, mes)
-       - anual:    (cod_ibge, ano)            — broadcast para todos os meses
-       - estática: (cod_ibge)                 — broadcast para todos os anos/meses
-    3. Valida o esquema contra configs/schema.yaml.
-    4. Grava data/processed/municipio_mes.parquet.
+Saída: data/processed/municipio_mes.parquet
+Chave: (cod_ibge, ano, mes)
+Grade: 645 municípios SP × 2015–2025 × 12 meses = 85.140 linhas
 
-Esqueleto. Implementar à medida que as ingestões forem ficando prontas.
+Fontes e estratégia de join:
+  mensal  (cod_ibge, ano, mes): sinan_dengue, sinan_zika, sinan_chikungunya,
+                                 nasa_power, saude
+  anual   (cod_ibge, ano):      ibge, socioeconomico, sinisa
+  estática (cod_ibge):          munic, habitacao
+  lookup  (cod_ibge):           nome, lat, lon, estação INMET
 """
-from pathlib import Path
-
 import pandas as pd
 
-from arboviral.io import INTERIM, PROCESSED
+from arboviral.io import INTERIM, LOOKUP, PROCESSED
+
+_ANOS = list(range(2015, 2026))  # 2015–2025 inclusive
+
+
+def _grade_base() -> pd.DataFrame:
+    """Cria a grade completa (cod_ibge, ano, mes) e adiciona geolocalização."""
+    lk = pd.read_excel(LOOKUP / "municipios_sp_estacoes_inmet.xlsx", engine="calamine")
+    lk = lk.rename(columns={
+        "Código Município Completo": "cod_ibge",
+        "Nome_Município": "nome_municipio",
+        "LATITUDE": "lat",
+        "LONGITUDE": "lon",
+        "CD_ESTACAO": "estacao_inmet",
+        "NOME_ESTACAO": "nome_estacao_inmet",
+        "DIST_KM": "dist_estacao_km",
+    })
+    lk["cod_ibge"] = lk["cod_ibge"].astype(int)
+
+    idx = pd.MultiIndex.from_product(
+        [lk["cod_ibge"], _ANOS, range(1, 13)],
+        names=["cod_ibge", "ano", "mes"],
+    )
+    grade = pd.DataFrame(index=idx).reset_index()
+    grade = grade.merge(lk, on="cod_ibge", how="left")
+    return grade
+
+
+def _sinan_prefixado(doenca: str) -> pd.DataFrame:
+    df = pd.read_parquet(INTERIM / f"sinan_{doenca}.parquet")
+    return df.rename(columns={
+        "casos_notificados": f"{doenca}_casos",
+        "casos_provaveis":   f"{doenca}_casos_provaveis",
+        "obitos":            f"{doenca}_obitos",
+        "internacoes":       f"{doenca}_internacoes",
+    })
 
 
 def build() -> pd.DataFrame:
-    """TODO: implementar joins quando houver pelo menos duas ingestões prontas."""
-    raise NotImplementedError("Aguardando primeiros parquets em data/interim/")
+    print("Criando grade base (645 municípios × 2015–2025 × 12 meses)...", flush=True)
+    df = _grade_base()
+    print(f"  {len(df):,} linhas", flush=True)
+
+    # --- Mensal ---
+    for doenca in ("dengue", "zika", "chikungunya"):
+        print(f"  Juntando SINAN {doenca}...", flush=True)
+        sinan = _sinan_prefixado(doenca)
+        df = df.merge(sinan, on=["cod_ibge", "ano", "mes"], how="left")
+
+    print("  Juntando NASA POWER...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "nasa_power.parquet"),
+        on=["cod_ibge", "ano", "mes"], how="left",
+    )
+
+    print("  Juntando saúde (CNES/SIM)...", flush=True)
+    saude = pd.read_parquet(INTERIM / "saude.parquet").rename(columns={
+        "leitos_sus":      "leitos_publicos",
+        "obitos_maternos": "mortalidade_materna",
+    })
+    df = df.merge(saude, on=["cod_ibge", "ano", "mes"], how="left")
+
+    # --- Anual ---
+    print("  Juntando IBGE (PIB, pop, GINI)...", flush=True)
+    ibge = pd.read_parquet(INTERIM / "ibge.parquet").rename(columns={
+        "pop_estimada":  "populacao_estimada",
+        "gini_2010":     "gini",
+    })
+    df = df.merge(ibge, on=["cod_ibge", "ano"], how="left")
+
+    print("  Juntando socioeconômico (CAPAG, IDH-M)...", flush=True)
+    socio = pd.read_parquet(INTERIM / "socioeconomico.parquet")
+    socio = socio.dropna(subset=["ano"]).copy()
+    socio["ano"] = socio["ano"].astype(int)
+    socio = socio.rename(columns={"idhm_2010": "idhm"})
+    df = df.merge(socio, on=["cod_ibge", "ano"], how="left")
+
+    print("  Juntando SINISA (água e esgoto)...", flush=True)
+    sinisa = pd.read_parquet(INTERIM / "sinisa.parquet").rename(columns={
+        "atend_agua_total_pct":   "iag0001_atend_agua_pct",
+        "atend_esgoto_total_pct": "ies0001_atend_esgoto_pct",
+        "atend_esgoto_trat_pct":  "ies2004_esgoto_tratado_pct",
+    })
+    df = df.merge(sinisa, on=["cod_ibge", "ano"], how="left")
+
+    # --- Estático ---
+    print("  Juntando MUNIC (gestão e desastres)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "munic.parquet"),
+        on="cod_ibge", how="left",
+    )
+
+    print("  Juntando habitação (favelas/aglomerados)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "habitacao.parquet"),
+        on="cod_ibge", how="left",
+    )
+
+    # Ordenação canônica
+    df = df.sort_values(["cod_ibge", "ano", "mes"]).reset_index(drop=True)
+    return df
+
+
+def _relatorio(df: pd.DataFrame) -> None:
+    print(f"\nShape final: {df.shape}")
+    print(f"Municípios: {df['cod_ibge'].nunique()}")
+    print(f"Anos: {sorted(df['ano'].unique())}")
+    print(f"Colunas ({len(df.columns)}): {list(df.columns)}")
+    print("\nCompletude (% não-nulo):")
+    pct = (df.notna().mean() * 100).round(1)
+    for col, v in pct.items():
+        bar = "█" * int(v / 5)
+        print(f"  {col:<40} {v:5.1f}%  {bar}")
 
 
 if __name__ == "__main__":
@@ -29,4 +134,5 @@ if __name__ == "__main__":
     out = PROCESSED / "municipio_mes.parquet"
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out, index=False)
-    print(f"Wrote {len(df):,} rows to {out}")
+    print(f"\nGravado {len(df):,} linhas em {out}")
+    _relatorio(df)

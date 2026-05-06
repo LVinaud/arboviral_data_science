@@ -49,12 +49,18 @@ O pipeline de ingestão está **100% implementado** para todos os 645 município
 
 Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 
+### Dataset consolidado — concluído
+
+`src/arboviral/transform/build_master.py` gera `data/processed/municipio_mes.parquet`:
+
+- **85.140 linhas** · 645 municípios SP × 11 anos (2015–2025) × 12 meses
+- **55 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças), 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação
+
 ### Próximas etapas
 
-1. **Consolidação (`build_master.py`).** Juntar todos os parquets em um único `data/processed/municipio_mes.parquet` com chave `(cod_ibge, ano, mes)`.
-2. **Rótulo de surto.** Formalizar a definição operacional (limiar de incidência por 100 mil habitantes) e calcular o target binário.
-3. **Modelagem.** Implementar e avaliar Random Forest, XGBoost e LightGBM contra baselines de persistência, sob validação temporal (*expanding window*) com métricas F1 e AUPRC.
-4. **Plataforma.** Interface integrada à inteli.gente com explicabilidade via SHAP.
+1. **Rótulo de surto.** Formalizar a definição operacional (limiar de incidência por 100 mil habitantes) e calcular o target binário.
+2. **Modelagem.** Implementar e avaliar Random Forest, XGBoost e LightGBM contra baselines de persistência, sob validação temporal (*expanding window*) com métricas F1 e AUPRC.
+3. **Plataforma.** Interface integrada à inteli.gente com explicabilidade via SHAP.
 
 ## Variáveis e fontes de dados
 

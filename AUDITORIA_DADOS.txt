@@ -259,17 +259,49 @@ SINISA             2023-2024, anual    Download manual ✓ OK
 Aglom. subnorm.    2010 e 2022         Download manual ✓ OK (contagem + pop absoluta)
 
 ================================================================================
+DATASET CONSOLIDADO — municipio_mes.parquet
+================================================================================
+
+Gerado por: src/arboviral/transform/build_master.py
+Saída: data/processed/municipio_mes.parquet (gitignored — derivado dos interim)
+Shape: 85.140 linhas × 55 colunas
+Chave: (cod_ibge, ano, mes) — 645 municípios SP × 2015–2025 × 12 meses
+
+Estratégia de join:
+  mensal  (cod_ibge, ano, mes): sinan_dengue, sinan_zika, sinan_chikungunya,
+                                 nasa_power, saude
+  anual   (cod_ibge, ano):      ibge, socioeconomico, sinisa
+  estático (cod_ibge):          munic, habitacao, lookup INMET
+
+Completude por grupo de variáveis:
+  Chave + geolocalização   100%  (lookup completo para todos os 645 municípios)
+  NASA POWER               100%  (API cobre 2015-2025 sem lacunas)
+  MUNIC                    94-100%  (estático — pequenas lacunas por não-resposta)
+  SINAN dengue              72%  (endêmica, mas não ocorre em todo município/mês)
+  SINAN chikungunya         16%  (surtos concentrados regionalmente)
+  SINAN zika                 7%  (epidemia pontual 2016-2017)
+  IBGE PIB/pop              82%  (dados até 2023; 2024-2025 NaN)
+  CAPAG/IDH-M               52%  (CAPAG disponível a partir de 2018)
+  SINISA água/esgoto        14-18%  (apenas 2023-2024 disponíveis)
+  Habitação — favelas        9-14%  (só municípios com favelas registradas)
+
+Renomeações aplicadas no build_master (interim → master):
+  leitos_sus          → leitos_publicos
+  obitos_maternos     → mortalidade_materna
+  pop_estimada        → populacao_estimada
+  gini_2010           → gini
+  idhm_2010           → idhm
+  atend_agua_*        → iag0001_atend_agua_pct
+  atend_esgoto_*      → ies0001_atend_esgoto_pct / ies2004_esgoto_tratado_pct
+  casos_notificados   → {doenca}_casos  (prefixo: dengue_, zika_, chikungunya_)
+
+================================================================================
 PRÓXIMOS PASSOS
 ================================================================================
 
-1. build_master.py: juntar todos os parquets em municipio_mes.parquet
-   chave: (cod_ibge, ano, mes)
-   atenção: dados estáticos (munic, habitacao, ibge-gini, idhm) replicados para
-   todos os meses; dados anuais (pib, pop, capag) replicados para 12 meses do ano.
+1. Definir e calcular o rótulo de surto (limiar de incidência por 100k hab).
 
-2. Definir e calcular o rótulo de surto (limiar de incidência por 100k hab).
+2. Modelagem: Random Forest, XGBoost, LightGBM com validação temporal.
 
-3. Modelagem: Random Forest, XGBoost, LightGBM com validação temporal.
-
-4. Todas as fontes do pipeline de ingestão estão completas e auditadas.
+3. Plataforma: interface integrada à inteli.gente com explicabilidade via SHAP.
 ================================================================================
