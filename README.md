@@ -211,7 +211,14 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-Depois, baixe os arquivos brutos para `data/raw/<fonte>/` e rode a ingestão correspondente:
+### Dados brutos (`data/raw/`)
+
+`data/raw/` não está versionada no git (arquivos DBC do DATASUS chegam a 275MB).
+Os dados brutos serão disponibilizados via **Zenodo** (DOI citável) em versão futura.
+Por enquanto, cada módulo de ingestão em `src/arboviral/ingestion/` tem um docstring
+descrevendo quais arquivos espera em `data/raw/<fonte>/` e de onde obtê-los.
+
+Depois de obter os dados brutos, rode a ingestão:
 
 ```bash
 python -m arboviral.ingestion.sinan          # ou inmet, munic, saude, ibge, ...
