@@ -40,6 +40,45 @@ Limitações:
   - internacoes = NaN em anos/doenças onde HOSPITALIZ não foi registrado
 
 --------------------------------------------------------------------------------
+1b. Febre Amarela — Ministério da Saúde / SVS (Dados Abertos)
+--------------------------------------------------------------------------------
+Origem: NÃO está no FTP público do SINAN — sistema separado por ser doença
+  silvestre/rara. Publicação via portal de Dados Abertos do MS.
+  https://dadosabertos.saude.gov.br/dataset/febre-amarela-em-humanos-e-primatas-nao-humanos
+Obtido por: download manual do CSV (curl one-liner documentado em
+  src/arboviral/ingestion/febre_amarela.py)
+
+Arquivos raw:
+  data/raw/febre_amarela/fa_casoshumanos_1994-2025.csv  (CSV, latin1, ';')
+
+Gerado: data/interim/febre_amarela.parquet  241 linhas (2000-2025, casos esparsos)
+
+Colunas: cod_ibge, ano, mes, casos, obitos
+
+Verificação de qualidade — SP 2015-2025:
+  - Total: 717 casos, 264 óbitos (118 municípios afetados)
+  - Pico 2017-2019: surto de febre amarela silvestre em SP
+      2017: 76 casos / 36 óbitos
+      2018: 504 casos / 179 óbitos  ← maior surto da série
+      2019: 71 casos / 12 óbitos
+  - 2020-2023: praticamente zero
+  - 2025: 55 casos / 31 óbitos (ressurgência preocupante)
+  - Letalidade ~37% (consistente com literatura: FA tem alta letalidade)
+
+DIFERENÇA METODOLÓGICA IMPORTANTE:
+  Granularidade municipal usa Local Provável de Infecção (COD_MUN_LPI),
+  NÃO município de residência. Isso é correto para FA porque a transmissão
+  é silvestre — pessoas se infectam visitando áreas de mata, não em casa.
+  Comparar com SINAN (residência) requer cuidado conceitual.
+
+NOTAS TÉCNICAS:
+  - Encoding: latin1 (não UTF-8); separador ';' (não ',')
+  - Campo OBITO inconsistente: 'SIM' vs 'NÃO' vs 'Não' vs 'IGN'
+    → normalizado: apenas 'SIM' conta como óbito
+  - COD_MUN_LPI tem 6 dígitos (igual SINAN); aplicado lookup 6→7d
+  - Não há HOSPITALIZ nem CLASSI_FIN — todos os registros já são confirmados
+
+--------------------------------------------------------------------------------
 2. NASA POWER — Meteorologia
 --------------------------------------------------------------------------------
 Origem: API REST pública da NASA
@@ -247,6 +286,8 @@ Fonte              Cobertura           Como obtido    Status
 SINAN dengue       2015-2025, mensal   API FTP auto   ✓ OK
 SINAN zika         2015-2025, mensal   API FTP auto   ✓ OK (pequeno volume)
 SINAN chikungunya  2015-2025, mensal   API FTP auto   ✓ OK
+Febre amarela      2015-2025, mensal   CSV MS dados   ✓ OK (raríssima — 717 casos SP/11 anos)
+                                       abertos
 NASA POWER         2015-2025, mensal   API REST auto  ✓ OK, 100% completude
 MUNIC 2018/2020    estático (1 obs/mun) Download manual ✓ OK
 CNES/LT (leitos)   2015-2025, mensal   FTP auto       ✓ OK (42% NaN = sem leitos)
@@ -264,23 +305,25 @@ DATASET CONSOLIDADO — municipio_mes.parquet
 
 Gerado por: src/arboviral/transform/build_master.py
 Saída: data/processed/municipio_mes.parquet (gitignored — derivado dos interim)
-Shape: 85.140 linhas × 55 colunas
+Shape: 85.140 linhas × 57 colunas
 Chave: (cod_ibge, ano, mes) — 645 municípios SP × 2015–2025 × 12 meses
 
 Estratégia de join:
   mensal  (cod_ibge, ano, mes): sinan_dengue, sinan_zika, sinan_chikungunya,
-                                 nasa_power, saude
+                                 febre_amarela, nasa_power, saude
   anual   (cod_ibge, ano):      ibge, socioeconomico, sinisa
   estático (cod_ibge):          munic, habitacao, lookup INMET
 
 Completude por grupo de variáveis:
   Chave + geolocalização   100%  (lookup completo para todos os 645 municípios)
   NASA POWER               100%  (API cobre 2015-2025 sem lacunas)
+  populacao_estimada       100%  (forward-fill 2024-2025 a partir de 2023; ver decisão)
   MUNIC                    94-100%  (estático — pequenas lacunas por não-resposta)
   SINAN dengue              72%  (endêmica, mas não ocorre em todo município/mês)
   SINAN chikungunya         16%  (surtos concentrados regionalmente)
   SINAN zika                 7%  (epidemia pontual 2016-2017)
-  IBGE PIB/pop              82%  (dados até 2023; 2024-2025 NaN)
+  Febre amarela             0.3% (raríssima — apenas pico 2017-2019, ressurgência 2025)
+  IBGE PIB                  82%  (até 2023; 2024-2025 NaN — não fizemos extrapolação)
   CAPAG/IDH-M               52%  (CAPAG disponível a partir de 2018)
   SINISA água/esgoto        14-18%  (apenas 2023-2024 disponíveis)
   Habitação — favelas        9-14%  (só municípios com favelas registradas)
@@ -293,7 +336,36 @@ Renomeações aplicadas no build_master (interim → master):
   idhm_2010           → idhm
   atend_agua_*        → iag0001_atend_agua_pct
   atend_esgoto_*      → ies0001_atend_esgoto_pct / ies2004_esgoto_tratado_pct
-  casos_notificados   → {doenca}_casos  (prefixo: dengue_, zika_, chikungunya_)
+  casos_notificados   → {doenca}_casos  (dengue_, zika_, chikungunya_, febre_amarela_)
+
+DECISÕES METODOLÓGICAS DOCUMENTADAS:
+
+1. População 2024-2025 — forward-fill de 2023:
+   PROBLEMA: IBGE só publica estimativas oficiais até 2023.
+   ALTERNATIVAS CONSIDERADAS:
+     (a) Forward-fill da estimativa de 2023 (escolhida)
+     (b) Modelo de tendência populacional (regressão linear sobre 2015-2023)
+     (c) Manter NaN e perder 2 anos da janela de modelagem
+   ESCOLHA: (a). Justificativa:
+     - Variação anual de população municipal em SP é tipicamente <2%
+     - Margem de erro da própria estimativa do IBGE é da ordem de 1-3%
+     - Modelo de tendência adicionaria complexidade sem ganho material
+     - Conservadora: assume status quo, não introduz pressupostos adicionais
+   IMPACTO: pib_per_capita NÃO foi recalculado para 2024-2025 (mantido NaN
+            porque pib_mil_reais também é NaN). Apenas populacao_estimada
+            recebeu o forward-fill.
+
+2. Febre amarela — município de Local Provável de Infecção (LPI):
+   Fonte usa LPI em vez de residência (padrão SINAN). Diferença INTRÍNSECA
+   à doença: febre amarela é predominantemente silvestre, transmitida por
+   mosquitos Haemagogus/Sabethes em áreas de mata. Pessoas que se infectam
+   geralmente o fazem fora do município de moradia (visitando áreas rurais
+   ou de turismo). Manter o LPI é metodologicamente correto para o objetivo
+   de identificar áreas de risco de transmissão.
+
+3. Cohen's kappa entre definições de surto (futuro):
+   Após implementar L1-L4 (canal endêmico, Z-score, limiar 100/100k, limiar
+   300/100k), calcular concordância par a par para responder RQ4.
 
 ================================================================================
 PRÓXIMOS PASSOS

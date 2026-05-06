@@ -27,26 +27,32 @@ geolocalizacao:
 porte:
   fonte: ibge
   periodicidade: anual
+  observacao: |
+    IBGE só publica estimativas populacionais até 2023. Para 2024 e 2025,
+    aplicamos forward-fill da estimativa de 2023 (ver build_master.py).
+    Decisão metodológica: simplicidade e conservadorismo — variação populacional
+    municipal anual é tipicamente <2%, dentro da margem de erro da própria
+    estimativa do IBGE.
   variaveis:
     populacao_estimada: {tipo: int}
 
 arboviroses:
   fonte: sinan_datasus
   periodicidade: mensal
-  observacao: município de RESIDÊNCIA (não de notificação). Replicar o bloco para zika e chikungunya quando disponíveis.
-  variaveis:
-    casos_acumulados: {tipo: int}
-    casos_provaveis: {tipo: int}
-    obitos_total: {tipo: int}
-    internacoes_total: {tipo: int}
-    sexo_predominante: {tipo: categoria, valores: [Masc, Fem, Empate]}
-    sexo_qde_casos: {tipo: int}
-    faixa_etaria_predominante: {tipo: categoria}
-    faixa_etaria_qde_casos: {tipo: int}
-    coef_incidencia: {tipo: float, descricao: "casos por 100 mil hab."}
-    coef_prevalencia: {tipo: float}
-    taxa_internacao_pct: {tipo: float}
+  observacao: |
+    Município de RESIDÊNCIA para dengue, zika e chikungunya (SINAN FTP).
+    Para febre amarela, município de Local Provável de Infecção (LPI), fonte
+    MS Dados Abertos (não está no FTP SINAN). Cada doença tem seu próprio prefixo
+    de coluna: dengue_*, zika_*, chikungunya_*, febre_amarela_*.
+  variaveis_por_doenca:
+    "{doenca}_casos": {tipo: int, descricao: "casos notificados no município/mês"}
+    "{doenca}_casos_provaveis": {tipo: int, descricao: "casos com classificação provável (apenas SINAN)"}
+    "{doenca}_obitos": {tipo: int}
+    "{doenca}_internacoes": {tipo: int, descricao: "apenas SINAN (HOSPITALIZ); não disponível para febre amarela"}
+  features_derivadas_em_features:
+    coef_incidencia: {tipo: float, descricao: "casos por 100 mil hab — calculado a partir de casos / populacao_estimada"}
     taxa_letalidade_pct: {tipo: float}
+    taxa_internacao_pct: {tipo: float, descricao: "apenas SINAN"}
 
 saude:
   fonte: datasus

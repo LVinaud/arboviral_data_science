@@ -18,8 +18,8 @@ Antecipar períodos de maior risco permite intensificar vigilância, planejar in
 Tarefa de **classificação supervisionada** com granularidade **município–mês**:
 
 - **Chave:** `(código IBGE, ano, mês)`
-- **Referência epidemiológica:** município de **residência** (não de notificação)
-- **Escopo:** dengue, zika e chikungunya (Oropouche foi excluída por indisponibilidade de dados padronizados no período)
+- **Referência epidemiológica:** município de **residência** para dengue, zika e chikungunya (SINAN); município de **Local Provável de Infecção (LPI)** para febre amarela (transmissão silvestre, fora do município de moradia é regra)
+- **Escopo:** dengue, zika, chikungunya e febre amarela (Oropouche excluída por indisponibilidade de dados padronizados no período)
 - **Alvo:** dado o conjunto de variáveis observadas até o mês `t`, prever a ocorrência de surto no mês `t+1`
 
 ### Perguntas de pesquisa
@@ -40,6 +40,7 @@ O pipeline de ingestão está **100% implementado** para todos os 645 município
 | `sinan_dengue.parquet` | SINAN/DATASUS | 2015–2025, mensal | Script FTP automático |
 | `sinan_zika.parquet` | SINAN/DATASUS | 2015–2025, mensal | Script FTP automático |
 | `sinan_chikungunya.parquet` | SINAN/DATASUS | 2015–2025, mensal | Script FTP automático |
+| `febre_amarela.parquet` | MS Dados Abertos (SVS) | 2015–2025, mensal | Download CSV (não está no FTP SINAN) |
 | `nasa_power.parquet` | NASA POWER API | 2015–2025, mensal | Script API automático |
 | `saude.parquet` | CNES/LT + SIM/DATASUS | 2015–2025, mensal | Script FTP automático |
 | `munic.parquet` | IBGE MUNIC 2018/2020 | estático | Download manual |
@@ -55,7 +56,11 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 `src/arboviral/transform/build_master.py` gera `data/processed/municipio_mes.parquet`:
 
 - **85.140 linhas** · 645 municípios SP × 11 anos (2015–2025) × 12 meses
-- **55 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças), 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação
+- **57 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação
+
+**Decisões metodológicas documentadas:**
+- *População 2024–2025*: forward-fill a partir das estimativas IBGE de 2023 (IBGE só publica até 2023). Alternativa rejeitada: ajustar modelo de tendência populacional. Forward-fill foi escolhida por simplicidade e por ser conservadora — variação populacional municipal anual é tipicamente <2%, dentro da margem de erro da própria estimativa do IBGE.
+- *Febre amarela*: agrega por município de Local Provável de Infecção (LPI), não residência (transmissão silvestre).
 
 ### Próximas etapas
 
@@ -82,22 +87,26 @@ Cada linha do dataset é identificada por **(município, ano, mês)**. A tabela 
 | Ano / Mês | Referência temporal da observação |
 | Porte (população total estimada) | Estimativa populacional do município no período |
 
-### Arboviroses — Base: SINAN/DATASUS
+### Arboviroses — Bases: SINAN/DATASUS + MS Dados Abertos (febre amarela)
 
-Abrange dengue, zika e chikungunya (município de **residência**).
+**Dengue, Zika e Chikungunya** (município de **residência**, fonte SINAN FTP):
 
 | Variável | Descrição |
 |---|---|
-| Casos acumulados | Total de casos acumulados no período |
-| Casos prováveis | Casos com classificação provável |
-| Total de óbitos | Óbitos confirmados |
-| Total de internações | Internações registradas |
-| Sexo (Masc/Fem) e quantidade de casos | Distribuição por sexo |
-| Faixa etária (descrição) e quantidade de casos | Distribuição por faixa etária |
-| Coeficiente de incidência | Casos por 100 mil habitantes |
-| Coeficiente de prevalência | Prevalência calculada |
-| Taxa de internação (%) | Internações sobre casos |
-| Taxa de letalidade (%) | Óbitos sobre casos confirmados |
+| `{doenca}_casos` | Total de casos notificados no município/mês |
+| `{doenca}_casos_provaveis` | Casos com classificação provável (CLASSI_FIN específico por doença) |
+| `{doenca}_obitos` | Óbitos confirmados (EVOLUCAO ∈ {2,3,4}) |
+| `{doenca}_internacoes` | Internações registradas (HOSPITALIZ == 1) |
+
+**Febre Amarela** (município de **Local Provável de Infecção (LPI)**, fonte MS dados abertos):
+
+| Variável | Descrição |
+|---|---|
+| `febre_amarela_casos` | Total de casos confirmados no município/mês |
+| `febre_amarela_obitos` | Óbitos confirmados (campo OBITO == 'SIM') |
+
+> Febre amarela não está no FTP público do SINAN (sistema separado por ser doença silvestre). Dados obtidos do CSV publicado no portal `dadosabertos.saude.gov.br` (atualização periódica pela SVS).
+> Variáveis derivadas (sexo predominante, faixa etária predominante, coeficiente de incidência, taxa de letalidade etc.) serão calculadas no módulo `features/` a partir das variáveis brutas acima e da `populacao_estimada`.
 
 ### Saúde — Base: DATASUS
 

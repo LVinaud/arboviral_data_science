@@ -7,10 +7,21 @@ Grade: 645 municípios SP × 2015–2025 × 12 meses = 85.140 linhas
 
 Fontes e estratégia de join:
   mensal  (cod_ibge, ano, mes): sinan_dengue, sinan_zika, sinan_chikungunya,
-                                 nasa_power, saude
+                                 febre_amarela, nasa_power, saude
   anual   (cod_ibge, ano):      ibge, socioeconomico, sinisa
   estática (cod_ibge):          munic, habitacao
   lookup  (cod_ibge):           nome, lat, lon, estação INMET
+
+Decisões metodológicas:
+  - População 2024-2025: forward-fill a partir de 2023 (IBGE só publica até 2023).
+    Alternativa rejeitada: ajustar modelo de tendência populacional. Forward-fill
+    foi escolhida por simplicidade e por ser conservadora — a mudança populacional
+    municipal entre anos consecutivos é tipicamente <2%, dentro da margem de erro
+    da própria estimativa do IBGE. Documentar essa escolha no relatório.
+  - Febre amarela: usa município de Local Provável de Infecção (LPI), enquanto
+    SINAN dengue/zika/chikungunya usam município de residência. Diferença
+    metodológica preservada por ser intrínseca à natureza das doenças (FA é
+    silvestre, transmissão fora do município de residência é regra).
 """
 import pandas as pd
 
@@ -63,6 +74,13 @@ def build() -> pd.DataFrame:
         sinan = _sinan_prefixado(doenca)
         df = df.merge(sinan, on=["cod_ibge", "ano", "mes"], how="left")
 
+    print("  Juntando febre amarela (MS dados abertos)...", flush=True)
+    fa = pd.read_parquet(INTERIM / "febre_amarela.parquet").rename(columns={
+        "casos":  "febre_amarela_casos",
+        "obitos": "febre_amarela_obitos",
+    })
+    df = df.merge(fa, on=["cod_ibge", "ano", "mes"], how="left")
+
     print("  Juntando NASA POWER...", flush=True)
     df = df.merge(
         pd.read_parquet(INTERIM / "nasa_power.parquet"),
@@ -112,8 +130,15 @@ def build() -> pd.DataFrame:
         on="cod_ibge", how="left",
     )
 
-    # Ordenação canônica
+    # Ordenação canônica antes do forward-fill (importante para o ffill respeitar a ordem)
     df = df.sort_values(["cod_ibge", "ano", "mes"]).reset_index(drop=True)
+
+    # População 2024-2025: IBGE só publica até 2023. Ver decisão metodológica no docstring.
+    print("  Forward-fill populacao_estimada para 2024-2025...", flush=True)
+    df["populacao_estimada"] = df.groupby("cod_ibge")["populacao_estimada"].ffill()
+    # pib_per_capita também recalculado depois do ffill quando pib_mil_reais existir
+    # (mas pib_mil_reais permanece NaN para 2024-2025; OK — variável separada)
+
     return df
 
 
