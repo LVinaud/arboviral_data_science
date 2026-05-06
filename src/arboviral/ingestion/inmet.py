@@ -8,8 +8,10 @@ Arquivos esperados em data/raw/inmet/:
     dados_{COD_ESTACAO}_M_{INICIO}_{FIM}.csv  — um por estação automática
 
 Lookup necessário (data/lookup/):
-    municipio_para_estacao.csv — mapeamento município → estação INMET mais próxima
-    (gerado uma única vez a partir das coordenadas geográficas).
+    municipios_sp_estacoes_inmet.xlsx — mapeamento município SP → estação INMET mais próxima,
+    com lat/lon do município e distância em km.
+    Colunas: Código Município Completo, Nome_Município, LATITUDE, LONGITUDE,
+             CD_ESTACAO, NOME_ESTACAO, DIST_KM
 
 Saída: data/interim/inmet_mensal.parquet
 Chave: (cod_ibge, ano, mes)

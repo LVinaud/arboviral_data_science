@@ -45,7 +45,7 @@ O pipeline de ingestão está **100% implementado** para todos os 645 município
 | `ibge.parquet` | IBGE SIDRA (PIB + pop) | 2002–2023, anual | Download manual |
 | `socioeconomico.parquet` | IDH-M (PNUD) + CAPAG (STN) | estático + 2018–2025 | Download manual |
 | `sinisa.parquet` | SINISA | 2023–2024, anual | Download manual |
-| `habitacao.parquet` | IBGE Censos 2010 e 2022 | estático | Download manual |
+| `habitacao.parquet` | IBGE Censos 2010 e 2022 | estático | Download manual (4 tabelas SIDRA) |
 
 Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 
@@ -146,13 +146,17 @@ Variáveis climáticas agregadas mensalmente (mínimo, média e máximo quando a
 | IES0001 | Atendimento da população total com rede coletora de esgoto (%) |
 | IES2004 | Esgoto tratado referido ao esgoto coletado (%) |
 
-### Habitação — Bases: IBGE Aglomerados Subnormais, IBGE 2022, IBGE 2020
+### Habitação — Bases: IBGE Aglomerados Subnormais (Censo 2010), IBGE Favelas (Censo 2022)
 
-| Variável | Descrição |
-|---|---|
-| População vivendo em favelas | Estimativa populacional em aglomerados subnormais |
-| Número de favelas e comunidades urbanas | Contagem de aglomerados subnormais |
-| MMAM2612 | Existência de moradia em situação de risco ambiental |
+Dados estáticos censitários. Municípios sem aglomerados/favelas têm NaN (0 implícito).
+
+| Campo | Fonte SIDRA | Descrição |
+|---|---|---|
+| `num_aglom_subnorm_2010` | Tabela 3379 | Número de aglomerados subnormais (Censo 2010) |
+| `pop_aglom_subnorm_2010` | Tabela 3381 | População residente em aglomerados subnormais (Censo 2010) |
+| `num_favelas_2022` | Tabela 9883 | Número de favelas e comunidades urbanas (Censo 2022) |
+| `pop_favelas_2022` | Tabela 9900 | População residente em favelas e comunidades urbanas (Censo 2022) |
+| MMAM2612 | IBGE MUNIC | Existência de moradia em situação de risco ambiental |
 
 ### Urbanização — Base: SINISA 2024
 

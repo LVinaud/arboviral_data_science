@@ -207,31 +207,36 @@ Limitações:
 --------------------------------------------------------------------------------
 Origem: IBGE — Censos Demográficos 2010 e 2022 (SIDRA)
   Tabela 3379: Número de aglomerados subnormais por município (Censo 2010)
-  Tabela 3381: "Percentual do total geral" — EXCLUÍDA (ver nota abaixo)
+  Tabela 3381: População residente em aglomerados subnormais (Censo 2010)
   Tabela 9883: Número de favelas e comunidades urbanas (Censo 2022)
-  Tabela 9900: "Percentual do total geral" — EXCLUÍDA (ver nota abaixo)
+  Tabela 9900: População residente em favelas e comunidades urbanas (Censo 2022)
 Obtido por: download manual pelo aluno, inserido em data/raw/habitacao/
 
 Arquivos raw: data/raw/habitacao/tabela{3379,3381,9883,9900}.xlsx
 
-Gerado: data/interim/habitacao.parquet    100 linhas (municípios com favelas)
+Gerado: data/interim/habitacao.parquet    645 linhas (todos os municípios SP)
 
-Colunas: num_aglom_subnorm_2010, num_favelas_2022
+Colunas: num_aglom_subnorm_2010, pop_aglom_subnorm_2010,
+         num_favelas_2022, pop_favelas_2022
 
 Verificação de qualidade:
-  - num_aglom_subnorm_2010: 1 a 1.020 ✓ (São Paulo capital tem 1.020 aglomerados)
-  - num_favelas_2022: 1 a 1.359 ✓ (São Paulo capital tem 1.359 favelas/comunidades)
-  - 60 municípios SP com aglomerados em 2010, 92 em 2022 ✓ (crescimento esperado)
-  - NaN = ausência de aglomerados/favelas registrados (não é dado faltante)
+  - num_aglom_subnorm_2010: 1 a 1.020 ✓ (SP capital = 1.020); 60 municípios
+  - pop_aglom_subnorm_2010: 161 a 1.280.400 ✓ (SP capital = 1,28M); 60 municípios
+  - num_favelas_2022: 1 a 1.359 ✓ (SP capital = 1.359); 92 municípios
+  - pop_favelas_2022: 96 a 1.728.235 ✓ (SP capital = 1,73M); 92 municípios
+  - NaN = ausência de aglomerados/favelas registrados (0 implícito, não dado faltante)
+  - Crescimento de 60 → 92 municípios entre 2010 e 2022 é esperado pelo Censo 2022
 
-PROBLEMA IDENTIFICADO — tabelas3381 e 9900 EXCLUÍDAS:
-  Essas tabelas têm a variável "percentual do total geral" que no SIDRA retorna
-  sempre o valor 100 para a categoria "Total" (linha de soma por sexo). Trata-se
-  de um artefato da exportação cross-tabulada: o "100" significa "100% dos casos
-  da categoria Total", não "100% da população municipal vive em favelas".
-  Para obter a POPULAÇÃO ABSOLUTA em aglomerados/favelas seria necessária outra
-  tabela SIDRA (Tabela 3382 ou consulta direta ao portal do IBGE).
-  Impacto: o dataset não tem a variável "população em favelas" — só a contagem.
+Nota técnica — estrutura SIDRA das tabelas de população (3381 e 9900):
+  Ambas têm cruzamento por sexo (Total / Masculino / Feminino).
+  Tabela 3381: 3 colunas (cod, município, "Ano x Sexo" = Total).
+  Tabela 9900: 4 colunas (cod, município, grupo_idade, "Ano x Sexo" = Total).
+  Filtro aplicado: grupo_idade == "Total" e coluna de sexo == "Total".
+  Traço "-" no SIDRA = município sem favelas → NaN no parquet.
+
+HISTÓRICO: versões anteriores dessas tabelas tinham a variável "percentual do
+  total geral" — artefato SIDRA que retorna 100 para a linha de soma por sexo.
+  As tabelas foram substituídas pelo aluno com a variável "população absoluta".
 
 ================================================================================
 RESUMO DAS FONTES E STATUS
@@ -251,8 +256,7 @@ IBGE GINI          2010 (censo)        Download manual ✓ OK (estático)
 IDH-M              2010 (censo)        Download manual ✓ OK (estático)
 CAPAG              2018-2025, anual    Download manual ✓ OK (cobertura variável)
 SINISA             2023-2024, anual    Download manual ✓ OK
-Aglom. subnorm.    2010 e 2022         Download manual ⚠ Pop absoluta indisponível
-                                                         (apenas contagem)
+Aglom. subnorm.    2010 e 2022         Download manual ✓ OK (contagem + pop absoluta)
 
 ================================================================================
 PRÓXIMOS PASSOS
@@ -267,6 +271,5 @@ PRÓXIMOS PASSOS
 
 3. Modelagem: Random Forest, XGBoost, LightGBM com validação temporal.
 
-4. Para população em favelas: obter tabela IBGE com contagem absoluta
-   (não percentual), se considerada necessária para a modelagem.
+4. Todas as fontes do pipeline de ingestão estão completas e auditadas.
 ================================================================================
