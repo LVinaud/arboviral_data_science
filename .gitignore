@@ -1,7 +1,10 @@
 contexto/
 
+# data/raw/ contém arquivos binários grandes (DBC, XLSX até 275MB) incompatíveis
+# com o limite de 100MB do GitHub. Ver README para instruções de obtenção dos dados.
+data/raw/
+
 # data/processed/ é gerada pelo build_master.py (derivada dos interim).
-# Todo o resto de data/ é versionado para reproducibilidade.
 data/processed/
 
 __pycache__/
