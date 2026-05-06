@@ -27,6 +27,7 @@ Tarefa de **classificação supervisionada** com granularidade **município–m�
 - **RQ1.** Em que medida modelos de ML treinados com dados multivariados (epidemiológicos + climáticos + indicadores municipais) melhoram a predição de surtos em comparação com baselines simples baseados apenas no histórico recente?
 - **RQ2.** Quais grupos de variáveis e quais defasagens temporais (lags de casos e clima) mais contribuem para o desempenho preditivo em nível município–mês?
 - **RQ3.** Quão robustas são as previsões frente a valores ausentes, heterogeneidade entre municípios e validação temporal prospectiva?
+- **RQ4.** Em que medida o desempenho preditivo depende da definição operacional de surto? Comparamos quatro definições — canal endêmico (mediana + 1.96·σ histórico), Z-score relativo (Z > 2), e dois limiares brutos de incidência (≥ 100 e ≥ 300 casos por 100 mil habitantes) — para avaliar se o modelo é robusto à escolha do rótulo. Concordância entre definições é medida com Cohen's kappa.
 
 ## Estado atual
 
@@ -58,8 +59,14 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 
 ### Próximas etapas
 
-1. **Rótulo de surto.** Formalizar a definição operacional (limiar de incidência por 100 mil habitantes) e calcular o target binário.
-2. **Modelagem.** Implementar e avaliar Random Forest, XGBoost e LightGBM contra baselines de persistência, sob validação temporal (*expanding window*) com métricas F1 e AUPRC.
+1. **Rótulos de surto (múltiplas definições).** Calcular quatro alvos binários para sensitivity analysis (RQ4):
+   - L1: canal endêmico (mediana + 1.96·σ histórico, por município/mês)
+   - L2: Z-score relativo (Z > 2 sobre a distribuição histórica)
+   - L3: limiar bruto baixo (≥ 100 casos / 100 mil hab)
+   - L4: limiar bruto alto (≥ 300 casos / 100 mil hab)
+   - Trabalho futuro: L5 — Moving Epidemic Method (MEM, requer ponte com R)
+   - Análise complementar: concordância entre definições via Cohen's kappa par a par
+2. **Modelagem.** Para cada um dos 4 rótulos, treinar Random Forest, XGBoost e LightGBM contra baselines de persistência, sob validação temporal (*expanding window*) com métricas AUPRC, F1, sensibilidade e especificidade.
 3. **Plataforma.** Interface integrada à inteli.gente com explicabilidade via SHAP.
 
 ## Variáveis e fontes de dados
