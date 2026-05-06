@@ -14,10 +14,15 @@ chaves:
 
 geolocalizacao:
   periodicidade: estatica
+  fonte: ibge_municipios + lookup/municipios_sp_estacoes_inmet.xlsx
   variaveis:
     nome_municipio: {tipo: str}
     cod_regiao_saude: {tipo: int}
     nome_regiao_saude: {tipo: str}
+    lat: {tipo: float, descricao: "latitude do centróide do município (graus decimais)"}
+    lon: {tipo: float, descricao: "longitude do centróide do município (graus decimais)"}
+    estacao_inmet: {tipo: str, descricao: "código da estação automática INMET mais próxima (ex.: A711)"}
+    dist_estacao_km: {tipo: float, descricao: "distância em km entre o município e a estação INMET associada"}
 
 porte:
   fonte: ibge
@@ -100,7 +105,7 @@ socioeconomico:
 agua_esgoto:
   fonte: snis_sinisa
   periodicidade: anual
-  observacao: dados de 2023 liberados em 2022; 2024 e 2025 ainda não disponíveis pelo SINISA.
+  observacao: "2023 e 2024 disponíveis no SINISA (arquivo local em data/raw/sinisa/). 2025 ainda não publicado."
   variaveis:
     iag0001_atend_agua_pct: {tipo: float, descricao: "atendimento da população total com rede de abastecimento de água (%)"}
     ies0001_atend_esgoto_pct: {tipo: float, descricao: "atendimento da população total com rede coletora de esgoto (%)"}

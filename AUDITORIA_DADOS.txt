@@ -1,0 +1,272 @@
+================================================================================
+RELATÓRIO DE AUDITORIA DO PIPELINE DE DADOS — ARBOVIROSES SP
+Gerado em: 2026-05-06
+================================================================================
+
+Este relatório descreve os arquivos brutos utilizados, como foram obtidos, o que
+foi gerado a partir deles e quaisquer limitações ou inconsistências encontradas.
+
+--------------------------------------------------------------------------------
+1. SINAN — Arboviroses (dengue, zika, chikungunya)
+--------------------------------------------------------------------------------
+Origem: FTP público do DATASUS
+  ftp://ftp.datasus.gov.br/dissemin/publicos/SINAN/DADOS/FINAIS/DENGBR{AA}.dbc
+  Idem para ZIKABR e CHIKBR (2015–2025)
+Obtido por: script automatizado (src/arboviral/ingestion/sinan_ftp.py)
+  - Usa curl para baixar os .dbc (formato comprimido DATASUS)
+  - Anos finais: 2015–2024; ano preliminar: 2025
+
+Arquivos raw: data/raw/sinan/DENGBR{AA}.dbc, ZIKABR{AA}.dbc, CHIKBR{AA}.dbc
+
+Gerado: data/interim/sinan_dengue.parquet    61.616 linhas (cod_ibge, ano, mes)
+         data/interim/sinan_zika.parquet      5.585 linhas
+         data/interim/sinan_chikungunya.parquet 13.395 linhas
+
+Colunas: casos_notificados, casos_provaveis, obitos, internacoes
+
+Verificação de qualidade:
+  - Dengue: max 200.201 casos notificados/mês (São Paulo, abril 2024) ✓ plausível
+  - Dengue: max 199.166 casos prováveis/mês ✓
+  - Dengue: max 198 óbitos/mês ✓
+  - Dengue: max 4.601 internações/mês ✓
+  - Zika: max 452 notificados, 8 óbitos ✓ (doença menos grave)
+  - Chikungunya: max 3.829 notificados ✓
+  - CLASSI_FIN: dengue=10/11/12, chikungunya=13, zika=2 (confirmados)
+  - Apenas municípios de SP (SG_UF == '35'), agregados por município de residência
+
+Limitações:
+  - Dados 2025 são preliminares (sujeitos a revisão)
+  - Chikungunya e zika têm anos com pouca cobertura (2015-2016)
+  - internacoes = NaN em anos/doenças onde HOSPITALIZ não foi registrado
+
+--------------------------------------------------------------------------------
+2. NASA POWER — Meteorologia
+--------------------------------------------------------------------------------
+Origem: API REST pública da NASA
+  https://power.larc.nasa.gov/api/temporal/monthly/point
+Obtido por: script automatizado (src/arboviral/ingestion/nasa_power.py)
+  - Consulta ponto a ponto para as coordenadas de cada município SP
+  - 645 municípios × 132 meses (2015–2025) = 85.140 registros
+  - Pausa de 0,4s entre requisições (respeito ao rate-limit da NASA)
+
+Arquivos raw: data/raw/nasa_power/nasa_power_municipios_sp.parquet
+
+Gerado: data/interim/nasa_power.parquet    85.140 linhas (cod_ibge, ano, mes)
+
+Colunas: temp_media (°C), temp_max (°C), temp_min (°C), precip_media_dia (mm/dia),
+         umid_media (%), vento_media (m/s), pressao_media_kpa (kPa)
+
+Verificação de qualidade:
+  - temp_media: 12,3 a 31,8 °C ✓ (SP tem clima variado, de serrana a tropical)
+  - temp_max: 20,8 a 44,8 °C ✓ (máx extremas plausíveis em SP)
+  - temp_min: -1,4 a 25,6 °C ✓ (geadas pontuais em regiões serranas)
+  - precip: 0 a 14,8 mm/dia ✓
+  - umid: 30,7 a 90,9 % ✓
+  - pressao: 89,3 a 102,3 kPa ✓ (varia com altitude — municípios de serra têm < pressão)
+  - Completude: 100% em todas as colunas (vantagem sobre INMET)
+  - Resolução espacial ~0,5° (~55 km); adequada para análise municipal
+
+Limitações:
+  - Dado de satélite/reanálise (MERRA-2), não estação física
+  - Resolução espacial limitada (municípios vizinhos podem ter mesmo valor)
+
+--------------------------------------------------------------------------------
+3. MUNIC — Vigilância e Gestão Municipal de Riscos
+--------------------------------------------------------------------------------
+Origem: IBGE — Pesquisa de Informações Básicas Municipais
+  https://www.ibge.gov.br/estatisticas/sociais/habitacao/10586-pesquisa-de-informacoes-basicas-municipais.html
+Obtido por: download manual pelo aluno, inserido em data/raw/munic/
+
+Arquivos raw:
+  data/raw/munic/Base_MUNIC_2018_xlsx_20201103.xlsx  (aba "Saúde")
+  data/raw/munic/Base_MUNIC_2020.xlsx                (abas "Gestão de riscos" e "Meio ambiente")
+
+Gerado: data/interim/munic.parquet    645 linhas (uma por município, dado estático)
+
+Colunas (bool True/False/NaN):
+  msau28_pacs, msau541_vig_sanitaria, msau542_vig_epidemiologica, msau543_controle_endemias
+  mgrd01_seca, mgrd06_alagamento, mgrd07_erosao, mgrd08_enchente_gradual,
+  mgrd11_enxurrada, mgrd14_deslizamento, mgrd201_mapeamento_risco, mmam2612_moradia_risco
+
+Verificação de qualidade:
+  - Vigilância em saúde (2018): 645/645 municípios sem NaN ✓
+  - Desastres naturais (2020): 1-5% NaN por variável (respostas "Não sabe") ✓
+  - mmam2612_moradia_risco: 38,8% NaN — muitos municípios responderam "Não sabe"
+    à questão sobre moradias em áreas de risco ambiental. Não é erro, é dado real.
+  - Valores "Não sabe" mapeados para NaN (não False) conforme documentação MUNIC.
+
+Nota técnica: o código IBGE nas planilhas MUNIC já vem com 7 dígitos completos
+(diferente do DATASUS que usa 6). Não aplicar lookup de 6→7 dígitos.
+
+--------------------------------------------------------------------------------
+4. CNES/LT + SIM — Saúde (leitos SUS e mortalidade materna)
+--------------------------------------------------------------------------------
+Origem: FTP público do DATASUS
+  CNES/LT: ftp://ftp.datasus.gov.br/dissemin/publicos/CNES/200508_/Dados/LT/LTSP{AAMM}.dbc
+  SIM: ftp://ftp.datasus.gov.br/dissemin/publicos/SIM/CID10/DORES/DOSP{YYYY}.dbc
+Obtido por: script automatizado (src/arboviral/ingestion/saude.py)
+  - Leitos: arquivos mensais LTSP{AAMM}.dbc (2015–2025)
+  - Mortalidade materna: arquivos anuais DOSP{YYYY}.dbc (2015–2024)
+
+Arquivos raw: data/raw/saude/LTSP{AAMM}.dbc e data/raw/saude/DOSP{YYYY}.dbc
+
+Gerado: data/interim/saude.parquet    82.741 linhas (cod_ibge, ano, mes)
+
+Colunas: leitos_sus (int), obitos_maternos (int)
+
+Verificação de qualidade:
+  - leitos_sus: 0 a 20.771 ✓ (São Paulo capital tem o maior complexo hospitalar SUS)
+  - leitos_sus: 42% NaN — municípios sem nenhum leito SUS cadastrado no CNES
+    (não é erro: municípios pequenos podem não ter unidades SUS com leitos)
+  - obitos_maternos: 0 a 112 ✓ (filtro CAUSABAS O00-O99, CID-10)
+  - obitos_maternos: 6,5% NaN — anos sem arquivo SIM disponível (2025)
+
+--------------------------------------------------------------------------------
+5. IBGE — PIB, População e GINI
+--------------------------------------------------------------------------------
+Origem: IBGE SIDRA — tabelas de acesso público
+  Tabela 5938: PIB municipal a preços correntes (Mil Reais), 2002–2023
+  Tabela 6579: Estimativas populacionais, 2001–2025 (com lacunas)
+  ginibr.xlsx: Índice de Gini da renda domiciliar per capita, 1991/2000/2010
+Obtido por: download manual pelo aluno, inserido em data/raw/ibge/
+
+Arquivos raw: data/raw/ibge/tabela5938.xlsx, tabela6579.xlsx, ginibr.xlsx
+
+Gerado: data/interim/ibge.parquet    14.190 linhas (cod_ibge, ano — 645 × 22 anos)
+
+Colunas: pop_estimada, pib_mil_reais, pib_per_capita, gini_2010
+
+Verificação de qualidade:
+  - PIB per capita: R$ 2.263 a R$ 688.332 ✓
+    (mínimos em municípios rurais pequenos, máximo em Louveira/SP — polo industrial)
+  - pop_estimada: 804 a 12.396.372 ✓ (Borá/SP menor município, São Paulo capital maior)
+  - gini_2010: 0,33 a 0,69 ✓ (escala 0–1; dentro dos valores históricos para SP)
+  - PIB per capita calculado como (pib_mil_reais × 1000) / pop_estimada
+    usando a estimativa populacional do mesmo ano. Para anos sem estimativa
+    direta de pop (e.g., 2007, 2010), o valor foi propagado do ano anterior (ffill).
+  - Completude: 100% em todas as colunas (após propagação) ✓
+
+Limitações:
+  - PIB disponível até 2023; anos 2024-2025 ainda não publicados pelo IBGE
+  - GINI é censitário (2010) — usado como variável estática para todos os anos
+
+--------------------------------------------------------------------------------
+6. IDH-M e CAPAG — Indicadores Socioeconômicos
+--------------------------------------------------------------------------------
+Origem:
+  IDH-M: Atlas do Desenvolvimento Humano no Brasil (PNUD)
+  CAPAG: Secretaria do Tesouro Nacional
+Obtido por: download manual pelo aluno, inserido em data/raw/idhm/ e data/raw/capag/
+
+Arquivos raw:
+  data/raw/idhm/IDHM_{1991,2000,2010}.csv
+  data/raw/capag/capag-*.xlsx, capag_*.xlsx (2018–2025)
+
+Gerado: data/interim/socioeconomico.parquet    3.682 linhas
+
+Colunas: capag (A/B/C/D), idhm_2010
+
+Verificação de qualidade:
+  - IDH-M 2010: 0,64 a 0,86 ✓ (escala 0–1; SP é estado com melhores IDH-M)
+    642 municípios com dados (3 sem correspondência no IBGE 2010)
+  - CAPAG: distribuição plausível por ano com maioria B e C ✓
+    Cobertura variável: 296 municípios (2018) a 595 (2021) — CAPAG não é obrigatório
+    para todos e pode estar ausente em municípios com pendências junto ao Tesouro.
+
+Limitações:
+  - IDH-M só disponível para anos censitários (1991, 2000, 2010); usando 2010 como proxy
+  - CAPAG de 2018 tem cobertura menor pois o sistema estava sendo implantado
+
+--------------------------------------------------------------------------------
+7. SINISA — Saneamento Básico (água e esgoto)
+--------------------------------------------------------------------------------
+Origem: Sistema Nacional de Informações em Saneamento Básico (SINISA)
+  https://www.gov.br/cidades/pt-br/acesso-a-informacao/acoes-e-programas/saneamento/sinisa
+Obtido por: download manual pelo aluno, inserido em data/raw/sinisa/
+
+Arquivos raw: 14 arquivos xlsx (água, esgoto, gestão — anos 2023 e 2024)
+
+Gerado: data/interim/sinisa.parquet    1.258 linhas (628-630 por ano)
+
+Colunas: atend_agua_total_pct, atend_esgoto_total_pct, atend_esgoto_trat_pct
+
+Verificação de qualidade:
+  - atend_agua_total_pct: 24,4 a 100% ✓
+  - atend_esgoto_total_pct: 16,8 a 100% ✓ (SP tem grande variação urbano/rural)
+  - atend_esgoto_trat_pct: 0 a 100% ✓
+  - atend_esgoto_trat_pct: 26,9% NaN — município prestou informação de coleta
+    mas não de tratamento (dado faltante no próprio SINISA)
+  - 628-630 de 645 municípios presentes (15 sem prestador cadastrado no SINISA)
+
+Limitações:
+  - Apenas 2023 e 2024 disponíveis; não há série histórica no SINISA anterior a 2023
+    (dados anteriores estavam no SNIS — sistema diferente, não incluído)
+
+--------------------------------------------------------------------------------
+8. IBGE Aglomerados Subnormais — Favelas
+--------------------------------------------------------------------------------
+Origem: IBGE — Censos Demográficos 2010 e 2022 (SIDRA)
+  Tabela 3379: Número de aglomerados subnormais por município (Censo 2010)
+  Tabela 3381: "Percentual do total geral" — EXCLUÍDA (ver nota abaixo)
+  Tabela 9883: Número de favelas e comunidades urbanas (Censo 2022)
+  Tabela 9900: "Percentual do total geral" — EXCLUÍDA (ver nota abaixo)
+Obtido por: download manual pelo aluno, inserido em data/raw/habitacao/
+
+Arquivos raw: data/raw/habitacao/tabela{3379,3381,9883,9900}.xlsx
+
+Gerado: data/interim/habitacao.parquet    100 linhas (municípios com favelas)
+
+Colunas: num_aglom_subnorm_2010, num_favelas_2022
+
+Verificação de qualidade:
+  - num_aglom_subnorm_2010: 1 a 1.020 ✓ (São Paulo capital tem 1.020 aglomerados)
+  - num_favelas_2022: 1 a 1.359 ✓ (São Paulo capital tem 1.359 favelas/comunidades)
+  - 60 municípios SP com aglomerados em 2010, 92 em 2022 ✓ (crescimento esperado)
+  - NaN = ausência de aglomerados/favelas registrados (não é dado faltante)
+
+PROBLEMA IDENTIFICADO — tabelas3381 e 9900 EXCLUÍDAS:
+  Essas tabelas têm a variável "percentual do total geral" que no SIDRA retorna
+  sempre o valor 100 para a categoria "Total" (linha de soma por sexo). Trata-se
+  de um artefato da exportação cross-tabulada: o "100" significa "100% dos casos
+  da categoria Total", não "100% da população municipal vive em favelas".
+  Para obter a POPULAÇÃO ABSOLUTA em aglomerados/favelas seria necessária outra
+  tabela SIDRA (Tabela 3382 ou consulta direta ao portal do IBGE).
+  Impacto: o dataset não tem a variável "população em favelas" — só a contagem.
+
+================================================================================
+RESUMO DAS FONTES E STATUS
+================================================================================
+
+Fonte              Cobertura           Como obtido    Status
+---------------------------------------------------------------------------
+SINAN dengue       2015-2025, mensal   API FTP auto   ✓ OK
+SINAN zika         2015-2025, mensal   API FTP auto   ✓ OK (pequeno volume)
+SINAN chikungunya  2015-2025, mensal   API FTP auto   ✓ OK
+NASA POWER         2015-2025, mensal   API REST auto  ✓ OK, 100% completude
+MUNIC 2018/2020    estático (1 obs/mun) Download manual ✓ OK
+CNES/LT (leitos)   2015-2025, mensal   FTP auto       ✓ OK (42% NaN = sem leitos)
+SIM (matern.)      2015-2024, anual    FTP auto       ✓ OK
+IBGE PIB+pop       2002-2023, anual    Download manual ✓ OK
+IBGE GINI          2010 (censo)        Download manual ✓ OK (estático)
+IDH-M              2010 (censo)        Download manual ✓ OK (estático)
+CAPAG              2018-2025, anual    Download manual ✓ OK (cobertura variável)
+SINISA             2023-2024, anual    Download manual ✓ OK
+Aglom. subnorm.    2010 e 2022         Download manual ⚠ Pop absoluta indisponível
+                                                         (apenas contagem)
+
+================================================================================
+PRÓXIMOS PASSOS
+================================================================================
+
+1. build_master.py: juntar todos os parquets em municipio_mes.parquet
+   chave: (cod_ibge, ano, mes)
+   atenção: dados estáticos (munic, habitacao, ibge-gini, idhm) replicados para
+   todos os meses; dados anuais (pib, pop, capag) replicados para 12 meses do ano.
+
+2. Definir e calcular o rótulo de surto (limiar de incidência por 100k hab).
+
+3. Modelagem: Random Forest, XGBoost, LightGBM com validação temporal.
+
+4. Para população em favelas: obter tabela IBGE com contagem absoluta
+   (não percentual), se considerada necessária para a modelagem.
+================================================================================

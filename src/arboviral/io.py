@@ -12,3 +12,6 @@ PROCESSED = DATA / "processed"
 MANUAL = DATA / "manual"
 LOOKUP = DATA / "lookup"
 CONFIGS = ROOT / "configs"
+
+# Lookup tables versionadas
+LOOKUP_INMET = LOOKUP / "municipios_sp_estacoes_inmet.xlsx"
