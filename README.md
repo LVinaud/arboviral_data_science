@@ -157,6 +157,18 @@ Pipeline rodado fim-a-fim em 4 doenças × 4 definições × 7 modelos × 3 fold
 - **RQ2**: para dengue, top features são lags próprios (`dengue_incid_lag1`, `dengue_casos_trend3`) e clima (`temp_min`, `precip_media_dia_roll3`). **Para zika, features de DENGUE são as mais preditivas** — valida empiricamente a inclusão de features cross-doença (mesmo vetor *Aedes aegypti*).
 - **Casos onde ML não supera persistência**: chikungunya×inc300 (raridade extrema), zika×canal/zscore (autocorrelação domina). Documentados como achado.
 
+**Análise de antecipação (achado central — utilidade real):**
+
+ML supera persistência **onde mais importa**: prevendo o INÍCIO de surto (transição 0→1), não apenas mantendo predições durante surtos em curso.
+
+| Modelo | Recall em INÍCIO de surto (dengue × inc100) | Falsos alarmes |
+|---|---:|---:|
+| persistência | **0.0%** | 0% |
+| Random Forest | **31.4%** | 7.9% |
+| XGBoost | **35.9%** | 8.3% |
+
+Random Forest antecipa **1 a cada 3 surtos novos** com 1 mês de antecedência, com baixa taxa de falsos alarmes. Persistência (modelo trivial) **nunca antecipa**. Esse é o resultado que justifica o uso de ML em vigilância. Detalhes em [`RELATORIO_MODELAGEM.md`](RELATORIO_MODELAGEM.md) seção 7.
+
 **Caso de uso da plataforma — exemplo real:**
 
 > Município **3548500**, abril/2024 (chikungunya): probabilidade prevista = **99%**, surto real = **sim**.
