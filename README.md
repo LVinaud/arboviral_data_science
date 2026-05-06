@@ -135,13 +135,45 @@ python -m arboviral.analyze_results       # gera tabelas-resumo (AUPRC por combi
 
 Saída: `data/processed/model_results.parquet` (uma linha por combinação) + tabelas CSV.
 
+### Resultados — primeira rodada completa
+
+Pipeline rodado fim-a-fim em 4 doenças × 4 definições × 7 modelos × 3 folds = **315 combinações** (21 puladas por classe degenerada em zika×inc300 e febre amarela). Documento completo em [`RELATORIO_MODELAGEM.md`](RELATORIO_MODELAGEM.md).
+
+**Ranking global (AUPRC médio sobre todas as combinações):**
+
+| Modelo | AUPRC | Lift médio | Notas |
+|---|---:|---:|---|
+| **RF** | **0.397** | 276× | Melhor desempenho global |
+| EBM | 0.367 | 272× | Intrinsecamente interpretável; quase tão bom quanto RF |
+| LGBM | 0.372 | 107× | Bom AUPRC, lift menor |
+| XGB | 0.362 | 271× | |
+| **Persistência** | 0.347 | 27× | Baseline surpreendentemente forte (autocorrelação) |
+| LogReg | 0.288 | 20× | Linear não captura interações ricas |
+| Climatologia | 0.151 | 12× | Sazonalidade pura não basta |
+
+**Achados principais (RQ1, RQ2, RQ4):**
+- **RQ1**: ML supera baselines em ~14% relativo (RF 0.397 vs persistência 0.347). Ganho mais expressivo em definições raras (chikungunya×inc100: ganho de +0.19 AUPRC).
+- **RQ4**: definição importa MUITO. Para dengue, AUPRC varia de 0.483 (zscore) a **0.792 (inc100)** — a escolha do rótulo tem mais impacto que a escolha do modelo.
+- **RQ2**: para dengue, top features são lags próprios (`dengue_incid_lag1`, `dengue_casos_trend3`) e clima (`temp_min`, `precip_media_dia_roll3`). **Para zika, features de DENGUE são as mais preditivas** — valida empiricamente a inclusão de features cross-doença (mesmo vetor *Aedes aegypti*).
+- **Casos onde ML não supera persistência**: chikungunya×inc300 (raridade extrema), zika×canal/zscore (autocorrelação domina). Documentados como achado.
+
+**Caso de uso da plataforma — exemplo real:**
+
+> Município **3548500**, abril/2024 (chikungunya): probabilidade prevista = **99%**, surto real = **sim**.
+> 
+> Razões (SHAP):
+> - **+** chikungunya teve 557 casos no mês passado
+> - **+** média 6 meses = 206 casos (epidemia em curso)
+> - **+** incidência 128/100k (alta)
+> - **+** crescimento 348 → 557 (tendência ascendente)
+
 ### Próximas etapas
 
-1. **Análise dos resultados** após o treino completo (RQ1: ML melhora sobre baselines? RQ4: definição importa?)
-2. **Sensitivity analysis com `--no-cross`**: comparar performance com vs sem features cross-doença
-3. **Hyperparameter tuning** com Optuna (atual usa defaults razoáveis)
+1. **Sensitivity analysis com `--no-cross`**: quantificar o ganho de incluir features cross-doença
+2. **Hyperparameter tuning** com Optuna (atual usa defaults)
+3. **Calibração de probabilidades** (importante para uso em produção)
 4. **Plataforma**: interface integrada à inteli.gente, exibindo top features SHAP para cada alerta
-5. Trabalho futuro: MEM (L5) via ponte R, redes neurais (LSTM/Transformer)
+5. Trabalho futuro: MEM (L5) via ponte R, framing alternativo para FA (anomaly detection)
 
 ## Variáveis e fontes de dados
 

@@ -430,17 +430,126 @@ DECISÕES DE DESIGN (também em configs/outbreak_label.yaml):
 (d) NaN em casos é tratado como 0 (ausência de registro = sem casos notificados).
 
 ================================================================================
+MODELAGEM — model_results.parquet
+================================================================================
+
+Gerado por: src/arboviral/train.py
+Pós-processamento: src/arboviral/analyze_results.py + src/arboviral/build_reports.py
+Saída: data/processed/model_results.parquet (315 linhas) + ~8 tabelas CSV
+Documento consolidado: RELATORIO_MODELAGEM.md (auto-gerado)
+
+ESCOPO:
+  4 doenças × 4 definições × 7 modelos × 3 folds = 336 combinações pretendidas.
+  Realmente executadas: 315. Excluídas: 21 (febre amarela em todas as definições
+  + zika × inc300) por zero positivos no treino — esperado pela raridade absoluta.
+
+VALIDAÇÃO TEMPORAL — expanding window (sem leakage):
+  Fold 1: train target_year ≤ 2021 → test target_year == 2022
+  Fold 2: train target_year ≤ 2022 → test target_year == 2023
+  Fold 3: train target_year ≤ 2023 → test target_year == 2024
+  target_year = ano de t+1 (não da feature) — cada predição é um surto do ano alvo.
+  2025 reservado para demonstração futura.
+
+DESBALANCEAMENTO (RECAPITULAÇÃO):
+  Para classes raras, modelo trivial "nunca declarar surto" tem alta acurácia mas
+  recall=0, F1=0, inútil para vigilância.
+
+  Solução adotada: class_weight='balanced' nos modelos sklearn (LogReg, RF, LGBM,
+  EBM) — o erro em positivos pesa n_total/(2·n_positivos), forçando o modelo a
+  valorizar acertos na classe minoritária.
+
+  XGBoost não aceita class_weight; usa scale_pos_weight = n_neg/n_pos com mesmo
+  efeito matemático. Calculado on-the-fly por fold em train.py.
+
+  SMOTE/oversampling NÃO foi usado: introduz risco de leakage temporal em séries
+  (mistura registros de momentos diferentes). class_weight é matematicamente
+  equivalente sem esse risco.
+
+MÉTRICA PRIMÁRIA — AUPRC + lift:
+  AUPRC (Average Precision) é robusta a class imbalance. Sempre reportada com
+  AUPRC_lift = AUPRC / prevalência_da_classe (= performance vs random baseline).
+  Modelo com lift > 1 é melhor que random; lift = 100 significa 100× melhor.
+
+RANKING GLOBAL DOS MODELOS (RQ1):
+  Modelo            AUPRC   Lift    Recall   Notas
+  rf                0.397   276×    0.42     Melhor desempenho global
+  ebm               0.367   272×    0.16     Intrinsecamente interpretável
+  xgb               0.362   271×    0.31
+  lgbm              0.372   107×    0.29
+  persistencia      0.347    27×    0.52     Baseline forte (autocorrelação)
+  logreg            0.288    20×    0.59     Linear não captura interações
+  climatologia      0.151    12×    0.05     Sazonalidade pura é insuficiente
+
+  Conclusão RQ1: ML supera baselines em ~14% relativo (RF vs persistência).
+  Ganho mais expressivo em definições raras (chikungunya × inc100: +0.19 AUPRC
+  absoluto, com persistência muito fraca pela raridade da classe).
+
+SENSIBILIDADE À DEFINIÇÃO DE SURTO (RQ4):
+  Para dengue, AUPRC varia de 0.483 (zscore) a 0.792 (inc100) — a escolha do
+  rótulo tem MAIS impacto que a escolha do modelo. Confirma a relevância da
+  análise multi-definição proposta.
+
+  Casos onde ML NÃO supera persistência:
+    - chikungunya × inc300 (raridade extrema, persistência domina)
+    - zika × canal/zscore (autocorrelação muito forte)
+  Documentados como achado científico, não como falha do método.
+
+DRIVERS PREDITIVOS (RQ2) — SHAP global nos modelos vencedores:
+
+  DENGUE (RF, canal endêmico):
+    14% dengue_incid_lag1     | 13% dengue_casos_trend3   | 12% dengue_casos_lag1
+     9% dengue_casos_lag12    |  6% dengue_casos_roll3    |  5% temp_min
+     2% precip_media_dia_roll3
+    → Lags próprios + clima dominam; sazonalidade anual (lag12) é importante.
+
+  CHIKUNGUNYA (RF, canal):
+    11% chikungunya_incid_lag1 | 11% chikungunya_casos_lag1
+    10% populacao_estimada     |  9% chikungunya_casos_roll6
+     5% dengue_casos_trend3    |  5% dengue_casos_lag1     ← cross-doença!
+     5% leitos_publicos        |  3% dengue_casos_roll3
+    → População do município + features de dengue estão entre os top.
+
+  ZIKA (LGBM, canal):
+    11% dengue_casos_lag1      ← cross-doença é a feature mais preditiva!
+    10% dengue_casos_roll6     | 10% lon (longitude)
+     6% umid_media_lag1        |  5% temp_media
+
+  → ACHADO CENTRAL: features de DENGUE são as mais preditivas para ZIKA.
+    Coerente com biologia: mesmo vetor (Aedes aegypti), mesmas condições
+    ambientais. Valida empiricamente a decisão de incluir features cross-doença.
+
+CASO DE USO DA PLATAFORMA — exemplo real do fold de teste 2024:
+  Município 3548500, abril/2024 (chikungunya):
+    - Probabilidade prevista: 99%
+    - Surto real: SIM
+    - Razões via SHAP:
+        + 557 casos no mês passado (chikungunya_casos_lag1)
+        + média 6 meses = 206 casos (chikungunya_casos_roll6)
+        + incidência 128/100k (chikungunya_incid_lag1)
+        + crescimento 348 → 557 (chikungunya_casos_lag2)
+
+  Cada alerta na plataforma final pode ter explicação automática gerada por
+  shap_por_predicao() em src/arboviral/evaluation/explain.py.
+
+================================================================================
 PRÓXIMOS PASSOS
 ================================================================================
 
-1. Modelagem: Random Forest, XGBoost, LightGBM com validação temporal expanding
-   window. Para cada doença, treinar 4 modelos (um por definição) e comparar
-   AUPRC/F1/sensibilidade/especificidade. Discutir trade-offs por definição (RQ4).
+1. Sensitivity analysis com --no-cross: quantificar o ganho de incluir features
+   cross-doença. (Hipótese: ganho substancial para zika; menor para dengue.)
 
-2. Análise de features: SHAP para identificar drivers principais por doença
-   (RQ2). Avaliar lags de clima e casos.
+2. Hyperparameter tuning com Optuna sobre fold de validação interna (atual usa
+   defaults razoáveis). Esperar ganhos marginais (<5% AUPRC).
 
-3. MEM (L5) como trabalho futuro — requer ponte com R.
+3. Calibração de probabilidades (importante para uso em produção): atualmente
+   modelos retornam probabilidades não-calibradas. Aplicar Platt scaling ou
+   isotonic regression no fold de validação.
 
-4. Plataforma: interface integrada à inteli.gente com explicabilidade.
+4. Framing alternativo para febre amarela: anomaly detection (ex.: Isolation
+   Forest sobre features climáticas + contexto).
+
+5. MEM (L5) via ponte R — comparar com canal endêmico nas mesmas combinações.
+
+6. Plataforma: interface integrada à inteli.gente com explicabilidade SHAP
+   automatizada por alerta.
 ================================================================================
