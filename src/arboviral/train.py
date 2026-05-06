@@ -8,20 +8,29 @@ Loop:
       para cada fold (target_year=2022, 2023, 2024):
         para cada modelo em [persistência, climatologia, logreg, ebm, rf, xgb, lgbm]:
           treinar, predizer, computar métricas
-          salvar linha em results
+          SALVAR predições em predictions.parquet (NOVO)
+          SALVAR modelo treinado em data/processed/models/ via joblib (NOVO)
+          salvar linha em model_results.parquet
 
-Saída: data/processed/model_results.parquet (uma linha por combinação)
+Saídas:
+  data/processed/model_results.parquet   uma linha por combinação (métricas)
+  data/processed/predictions.parquet     uma linha por (combinação × amostra de teste)
+                                          permite QUALQUER análise post-hoc sem retreinar
+  data/processed/models/{doenca}_{definicao}_{modelo}_{fold}.joblib
+                                          modelo serializado, pronto para reuso/deploy
 
 Uso:
-  python -m arboviral.train                    # todas as combinações
-  python -m arboviral.train --doencas dengue   # apenas dengue
-  python -m arboviral.train --no-cross         # sem features cross-doença
+  python -m arboviral.train                       # todas as combinações
+  python -m arboviral.train --doencas dengue      # apenas dengue
+  python -m arboviral.train --no-cross            # sem features cross-doença
+  python -m arboviral.train --skip-save-models    # NÃO serializa modelos (mais rápido)
 """
 from __future__ import annotations
 
 import argparse
 import time
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -101,14 +110,54 @@ def _ajustar_xgb_scale_pos_weight(modelo, y_train: pd.Series):
             modelo.named_steps["clf"].set_params(scale_pos_weight=spw)
 
 
+def _registrar_predicoes(
+    pred_rows: list[dict], doenca: str, definicao: str, modelo: str,
+    ano_teste: int, meta_test: pd.DataFrame, y_test: pd.Series, proba: np.ndarray,
+    incluir_cross: bool,
+) -> None:
+    """Adiciona uma linha por amostra de teste em pred_rows (acumulador externo).
+
+    Cada linha tem: identificadores da combinação + chave da amostra (cod_ibge,
+    ano, mes) + probabilidade prevista + label real. Permite QUALQUER análise
+    post-hoc (transições, calibração, erro por município, etc.) sem retreinar.
+    """
+    for i in range(len(y_test)):
+        pred_rows.append({
+            "doenca": doenca, "definicao": definicao, "modelo": modelo,
+            "fold_ano_teste": ano_teste, "incluir_cross": incluir_cross,
+            "cod_ibge": int(meta_test.iloc[i]["cod_ibge"]),
+            "ano": int(meta_test.iloc[i]["ano"]),
+            "mes": int(meta_test.iloc[i]["mes"]),
+            "surto_atual": int(meta_test.iloc[i]["surto_atual"]),
+            "y_true": int(y_test.iloc[i]),
+            "prob_predita": float(proba[i]),
+        })
+
+
+def _salvar_modelo(modelo, doenca: str, definicao: str, nome_modelo: str,
+                   ano_teste: int, suffix: str = "") -> None:
+    """Serializa o modelo treinado em data/processed/models/."""
+    pasta = PROCESSED / "models"
+    pasta.mkdir(parents=True, exist_ok=True)
+    arquivo = pasta / f"{doenca}_{definicao}_{nome_modelo}_{ano_teste}{suffix}.joblib"
+    joblib.dump(modelo, arquivo, compress=3)
+
+
 def avaliar_combinacao(
     feats: pd.DataFrame, labels: pd.DataFrame,
     doenca: str, definicao: str, incluir_cross: bool = True,
+    pred_rows: list[dict] | None = None,
+    salvar_modelos: bool = True,
 ) -> list[dict]:
-    """Avalia todos os modelos para uma combinação (doença × definição) em todos os folds."""
+    """Avalia todos os modelos para uma combinação (doença × definição) em todos os folds.
+
+    Se pred_rows for fornecido, predições por amostra são acumuladas nele.
+    Se salvar_modelos=True, serializa cada modelo treinado em data/processed/models/.
+    """
     rows: list[dict] = []
     X, y, meta = _preparar_X_y_meta(feats, labels, doenca, definicao, incluir_cross)
     df_split = pd.concat([meta, X], axis=1)
+    suffix = "" if incluir_cross else "_nocross"
 
     for fold_idx, (ano_teste, idx_train, idx_test) in enumerate(
         folds_expanding_window(df_split), start=1
@@ -147,6 +196,9 @@ def avaliar_combinacao(
                 "incluir_cross": incluir_cross, "tempo_s": round(time.time() - t0, 2),
                 **m,
             })
+            if pred_rows is not None:
+                _registrar_predicoes(pred_rows, doenca, definicao, base.nome,
+                                     ano_teste, meta_test, y_test, proba, incluir_cross)
 
         # --- Modelos ML ---
         modelos = todos_modelos()
@@ -158,6 +210,11 @@ def avaliar_combinacao(
                 mdl.fit(X_train, y_train)
                 proba = mdl.predict_proba(X_test)[:, 1]
                 m = computar_metricas(y_test.values, proba)
+                if pred_rows is not None:
+                    _registrar_predicoes(pred_rows, doenca, definicao, nome,
+                                         ano_teste, meta_test, y_test, proba, incluir_cross)
+                if salvar_modelos:
+                    _salvar_modelo(mdl, doenca, definicao, nome, ano_teste, suffix)
             except Exception as e:
                 print(f"    [erro] {nome} fold {ano_teste}: {e}", flush=True)
                 m = {k: np.nan for k in
@@ -179,6 +236,10 @@ def main() -> None:
     parser.add_argument("--definicoes", nargs="+", default=DEFINICOES, choices=DEFINICOES)
     parser.add_argument("--no-cross", action="store_true",
                         help="Excluir features cross-doença para sensitivity analysis (RQ2)")
+    parser.add_argument("--skip-save-models", action="store_true",
+                        help="Não serializar modelos (.joblib) — mais rápido se só quiser predições")
+    parser.add_argument("--skip-save-predictions", action="store_true",
+                        help="Não salvar predições por amostra (apenas métricas agregadas)")
     args = parser.parse_args()
 
     print("Carregando features e labels...", flush=True)
@@ -187,6 +248,8 @@ def main() -> None:
 
     incluir_cross = not args.no_cross
     suffix = "" if incluir_cross else "_nocross"
+    salvar_modelos = not args.skip_save_models
+    pred_rows: list[dict] | None = [] if not args.skip_save_predictions else None
 
     todas_rows: list[dict] = []
     total = len(args.doencas) * len(args.definicoes)
@@ -197,7 +260,8 @@ def main() -> None:
             contador += 1
             print(f"\n[{contador}/{total}] {doenca} × {definicao} (cross={incluir_cross})", flush=True)
             t0 = time.time()
-            rows = avaliar_combinacao(feats, labels, doenca, definicao, incluir_cross)
+            rows = avaliar_combinacao(feats, labels, doenca, definicao, incluir_cross,
+                                       pred_rows=pred_rows, salvar_modelos=salvar_modelos)
             todas_rows.extend(rows)
             print(f"  ({time.time() - t0:.1f}s) {len(rows)} resultados", flush=True)
 
@@ -206,6 +270,13 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     df_results.to_parquet(out, index=False)
     print(f"\nGravado {len(df_results):,} linhas em {out}")
+
+    # Salvar predições (caso não pulado) — permite análises post-hoc sem retreinar
+    if pred_rows is not None and pred_rows:
+        df_preds = pd.DataFrame(pred_rows)
+        out_preds = PROCESSED / f"predictions{suffix}.parquet"
+        df_preds.to_parquet(out_preds, index=False)
+        print(f"Gravado {len(df_preds):,} predições em {out_preds}")
 
     # Resumo: AUPRC médio por (doença, definição, modelo) — média sobre folds
     print("\n" + "=" * 90)
