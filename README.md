@@ -85,10 +85,63 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 - Zika e FA: definições estatísticas degeneram (baseline ≈ 0) e ficam essencialmente equivalentes a "qualquer caso ≥ 5"
 - Implicação: para dengue, comparar todas as definições é informativo; para FA, modelagem clássica é inviável e isso por si só é um achado
 
+### Pipeline de modelagem — implementado
+
+Pipeline completo de features → treino → análise, com foco em **explicabilidade** (a plataforma final precisa justificar o alerta para o gestor):
+
+**Features** ([`src/arboviral/features/build_features.py`](src/arboviral/features/build_features.py)) — gera `data/processed/features.parquet` (117 colunas):
+- Lags de casos (t-1, t-2, t-3, t-6, t-12) e de incidência (t-1..t-3) por doença
+- Rolling means (janelas 3 e 6 meses) e tendência linear
+- Lags climáticos (precip, temp, umidade em t-1, t-2, roll3) — literatura aponta efeito 1-2 meses
+- Sazonalidade cíclica: `mes_sin`, `mes_cos`
+- Estáticas e anuais já no master (MUNIC, habitação, IDH, GINI, PIB, CAPAG, SINISA)
+- **Sem leakage**: todas as features no instante t usam apenas dados ≤ t
+
+**Validação** ([`src/arboviral/evaluation/splits.py`](src/arboviral/evaluation/splits.py)) — *expanding window* com 3 dobras:
+- Fold 1: treina ≤ 2021, testa target_year=2022
+- Fold 2: treina ≤ 2022, testa target_year=2023
+- Fold 3: treina ≤ 2023, testa target_year=2024
+- 2025 reservado para demonstração futura
+
+**Portfolio de modelos** ([`src/arboviral/models/`](src/arboviral/models/)):
+
+| Modelo | Tipo | Explicabilidade |
+|---|---|---|
+| Persistência | Baseline trivial (P(t+1) = surto(t)) | N/A |
+| Climatologia | Baseline trivial (frequência histórica por mun/mês) | N/A |
+| LogReg | Intrinsecamente interpretável | Coeficientes |
+| **EBM** (interpret-ml) | Intrinsecamente interpretável | Curvas de contribuição por feature |
+| Random Forest | Black-box | SHAP |
+| XGBoost | Black-box | SHAP |
+| LightGBM | Black-box | SHAP |
+
+Todos os modelos ML usam `class_weight='balanced'` (XGBoost via `scale_pos_weight`) — para detalhes pedagógicos sobre desbalanceamento de classes ver [`AUDITORIA_DADOS.txt`](AUDITORIA_DADOS.txt).
+
+**Métricas** ([`src/arboviral/evaluation/metrics.py`](src/arboviral/evaluation/metrics.py)):
+- Primária: **AUPRC** (Average Precision) — robusta a class imbalance, padrão em vigilância
+- Lift sobre baseline aleatório: AUPRC / prevalência
+- Secundárias: F1, recall (sensibilidade), specificity, precision
+
+**Explicabilidade** ([`src/arboviral/evaluation/explain.py`](src/arboviral/evaluation/explain.py)):
+- `shap_tree()`: TreeExplainer para RF/XGB/LGBM
+- `importancias_logreg()` / `importancias_ebm()`: extração nativa
+- `shap_por_predicao()`: top features que justificam UMA predição (use case da plataforma)
+
+**Treino e análise:**
+```bash
+python -m arboviral.train                # treina 4 doenças × 4 definições × 7 modelos × 3 folds
+python -m arboviral.analyze_results       # gera tabelas-resumo (AUPRC por combinação, ranking, etc.)
+```
+
+Saída: `data/processed/model_results.parquet` (uma linha por combinação) + tabelas CSV.
+
 ### Próximas etapas
 
-1. **Modelagem.** Para cada um dos 4 rótulos, treinar Random Forest, XGBoost e LightGBM contra baselines de persistência, sob validação temporal (*expanding window*) com métricas AUPRC, F1, sensibilidade e especificidade. MEM (L5) fica como trabalho futuro pela necessidade de ponte com R.
-2. **Plataforma.** Interface integrada à inteli.gente com explicabilidade via SHAP.
+1. **Análise dos resultados** após o treino completo (RQ1: ML melhora sobre baselines? RQ4: definição importa?)
+2. **Sensitivity analysis com `--no-cross`**: comparar performance com vs sem features cross-doença
+3. **Hyperparameter tuning** com Optuna (atual usa defaults razoáveis)
+4. **Plataforma**: interface integrada à inteli.gente, exibindo top features SHAP para cada alerta
+5. Trabalho futuro: MEM (L5) via ponte R, redes neurais (LSTM/Transformer)
 
 ## Variáveis e fontes de dados
 
@@ -213,21 +266,41 @@ arboviral_data_science/
 │   ├── schema.yaml              # esquema canônico do dataset município–mês
 │   ├── municipios_poc.yaml      # 32 municípios da POC
 │   └── outbreak_label.yaml      # definição operacional do rótulo de surto
-├── data/                        # local, fora do git (exceto lookup/)
-│   ├── raw/                     # arquivos baixados manualmente, por fonte
-│   ├── interim/                 # 1 parquet por fonte (saída de src/arboviral/ingestion)
-│   ├── processed/               # municipio_mes.parquet (saída do build_master)
-│   ├── manual/                  # planilhas editadas à mão
-│   └── lookup/                  # tabelas pequenas versionadas (município↔estação INMET, etc.)
+├── data/                        # local; data/raw e data/processed são gitignored
+│   ├── raw/                     # arquivos brutos (gitignored — Zenodo no futuro)
+│   ├── interim/                 # 1 parquet por fonte (saída de ingestion/) — versionado
+│   ├── processed/               # municipio_mes, labels, features, model_results — gitignored
+│   └── lookup/                  # tabelas pequenas versionadas (município↔estação INMET)
 ├── src/arboviral/
 │   ├── io.py                    # caminhos canônicos
-│   ├── ingestion/               # 1 módulo por fonte: sinan, inmet, munic, saude, ibge,
-│   │                            # socioeconomico, snis, habitacao
-│   ├── transform/               # build_master.py — junta os parquets intermediários
-│   ├── features/                # lags, médias móveis, normalizações
-│   ├── labels/                  # rótulo de surto
-│   ├── models/                  # baselines, RF, XGBoost, LightGBM
-│   └── evaluation/              # split temporal, métricas, SHAP
+│   ├── ingestion/               # 1 módulo por fonte
+│   │   ├── sinan.py + sinan_ftp.py + sinan_api.py     # dengue, zika, chikungunya
+│   │   ├── febre_amarela.py     # FA (dados abertos MS — não está no FTP SINAN)
+│   │   ├── nasa_power.py        # clima
+│   │   ├── saude.py             # CNES + SIM (leitos, mortalidade)
+│   │   ├── munic.py             # IBGE MUNIC (gestão e desastres)
+│   │   ├── ibge.py              # PIB, população, GINI
+│   │   ├── socioeconomico.py    # IDH-M + CAPAG
+│   │   ├── snis.py              # água e esgoto (SINISA)
+│   │   └── habitacao.py         # aglomerados subnormais e favelas (Censos 2010, 2022)
+│   ├── transform/build_master.py    # consolida 10 interim → municipio_mes.parquet
+│   ├── labels/                  # rótulos de surto (4 definições, RQ4)
+│   │   ├── outbreak.py          # funções por definição (canal, zscore, inc100, inc300)
+│   │   └── build_labels.py      # entry point — gera labels.parquet + Cohen's kappa
+│   ├── features/build_features.py   # lags, rolling, sazonalidade — gera features.parquet
+│   ├── models/                  # portfolio: baselines + classificadores
+│   │   ├── baselines.py         # persistência, climatologia
+│   │   └── classifiers.py       # logreg, ebm, rf, xgb, lgbm
+│   ├── evaluation/
+│   │   ├── splits.py            # expanding window (3 folds)
+│   │   ├── metrics.py           # AUPRC + lift, F1, recall, specificity
+│   │   └── explain.py           # SHAP (tree models) + interpretação nativa (LogReg, EBM)
+│   ├── train.py                 # treina (4 doenças × 4 def × 7 modelos × 3 folds)
+│   └── analyze_results.py       # agrega resultados em tabelas para o relatório
+├── configs/                     # contratos do projeto (YAML)
+│   ├── schema.yaml              # esquema canônico do dataset município–mês
+│   ├── outbreak_label.yaml      # parâmetros das 4 definições de surto
+│   └── municipios_poc.yaml      # 32 municípios da POC inicial
 ├── notebooks/                   # exploração e prototipagem
 ├── tests/                       # smoke tests e validação de schema
 └── contexto/                    # material legado (Drive, relatório PDF) — gitignored
