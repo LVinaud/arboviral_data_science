@@ -26,6 +26,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ruff>=0.1"]
+# Plataforma Streamlit (branch experimental/platform-app) — depende do core
+# mas o core NÃO depende destas. Instalar com: pip install -e ".[app]"
+app = [
+    "streamlit>=1.28",
+    "plotly>=5.17",
+    "interpret>=0.5",     # já está nas deps do core para EBM, listado aqui por clareza
+    "python-calamine>=0.2", # leitor Excel (compartilhado com ingestion)
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
