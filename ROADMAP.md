@@ -47,13 +47,14 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 - **Cobertura**: 645/645 municípios SP × 10 anos, 100% completude
 - **Estatísticas SP**: agricultura 74% mediano, floresta 9.4% mediano, urbanizado 1.3% mediano (download + integração)
 
-#### 3. **Cobertura ESF (Estratégia Saúde da Família)**
-- **O que adiciona**: % de cobertura ESF por município (mensal/anual).
-- **Por que importa**: determina capacidade de detecção precoce e resposta a surtos. Município com cobertura alta detecta cedo, captura mais casos no SINAN — mas também responde mais rápido.
-- **Onde obter**: DATASUS/e-Gestor AB
-  - https://egestorab.saude.gov.br/paginas/acessoPublico/relatorios/relHistoricoCoberturaAB.xhtml
-- **Formato**: Excel/CSV mensal
-- **Esforço**: 2-3 dias
+#### 3. **Cobertura ESF (Estratégia Saúde da Família)** ✅ CONCLUÍDO
+- **O que adiciona**: 5 colunas (cobertura %, qtde equipes ESF, capacidade, pop referência, metodologia).
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/esf_coverage.py` (API REST descoberta via DevTools)
+  - Parsing: `src/arboviral/ingestion/esf.py` (harmoniza AB vs APS)
+- **Endpoints**: `relatorioaps-prd.saude.gov.br/cobertura/{ab,aps}` — GET retornando JSON
+- **Quebra metodológica em 2021** documentada via flag `esf_metodologia` ('AB'/'APS')
+- **Cobertura**: 99.9% das linhas SP (645 municípios × 132 meses)
 
 ### 🥈 Top 4-7 — Impacto moderado
 
@@ -241,6 +242,7 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 | ✅ Feito | 2.9 Densidade populacional | Driver direto de transmissão urbana |
 | ✅ Feito | 2.2 MapBiomas — uso do solo | Distingue urbano/floresta/agric (drivers vetoriais distintos) |
 | ✅ Feito | 2.5 Latência SINAN | Proxy direto de subnotificação (mediana 3-7d por doença) |
+| ✅ Feito | 2.3 Cobertura ESF/APS | API REST direta (sem Selenium); 132 meses harmonizados |
 | **Longo** | 3.4 Validação externa MG | Crítico para artigo sério |
 | **Longo** | 3.4 Validação externa 2º estado | Generalização real |
 | **Longo** | Multitask multidoença | Diferencial metodológico para journal |

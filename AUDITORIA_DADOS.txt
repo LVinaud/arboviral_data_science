@@ -382,6 +382,61 @@ JUSTIFICATIVA EPIDEMIOLÓGICA:
     (vetores Haemagogus/Sabethes em mata fechada).
   - pct_agricultura: modificação de habitat e exposição ocupacional.
 
+--------------------------------------------------------------------------------
+11. e-Gestor MS — Cobertura da Atenção Primária à Saúde (ex-ESF)
+--------------------------------------------------------------------------------
+Origem: API REST do portal e-Gestor APS do Ministério da Saúde
+  https://relatorioaps-prd.saude.gov.br/cobertura/{ab|aps}
+  ?unidadeGeografica=MUNICIPIO&nuCompInicio=YYYYMM&nuCompFim=YYYYMM
+
+Endpoints DESCOBERTOS via DevTools/Network do navegador (a SPA do e-Gestor
+chama essa API por baixo). Sem necessidade de Selenium — GET simples retornando
+JSON com lista de 5570 municípios brasileiros por mês.
+
+Há QUEBRA METODOLÓGICA em 2021:
+  AB  (2015-2020): "Cobertura da Atenção Básica" — usa pcCoberturaAb
+                    valores em STRING formato BR ("12,106,920")
+                    nuComp = "201801"
+  APS (2021-presente): "Cobertura Potencial da APS" — usa qtCobertura
+                       valores em INT/FLOAT direto
+                       nuComp = "01/2024"
+
+Coleta automatizada por: src/arboviral/scraping/esf_coverage.py
+  - 132 arquivos JSON (72 cobertura_ab_*.json + 60 cobertura_aps_*.json)
+  - ~380 MB total raw
+  - Pausa de 1s entre requests (respeito ao servidor)
+
+Parsing por: src/arboviral/ingestion/esf.py
+  - Harmoniza os 2 formatos (parser distinto para AB vs APS)
+  - Lookup IBGE 6→7 dígitos (mesmo padrão do SINAN)
+  - Filtra SP
+
+Arquivos raw:    data/raw/esf/cobertura_<ab|aps>_<YYYYMM>.json
+Gerado:          data/interim/esf.parquet (85.037 linhas, 99.9% completude)
+
+Colunas:
+  esf_metodologia       'AB' ou 'APS' (flag categórica para o modelo)
+  esf_cobertura_pct     % cobertura APS/AB calculada pelo MS
+  esf_qt_equipes        número de equipes ESF
+  esf_qt_capacidade     capacidade total (apenas APS; NaN para AB)
+  esf_pop_referencia    população usada como denominador pelo MS
+
+Verificação de qualidade — SP:
+  - 645 municípios SP cobertos
+  - 99.9% de completude (cobertura, equipes, pop)
+  - 45.3% para esf_qt_capacidade (apenas APS, esperado)
+  - SP capital: 59.4% AB (2018) → 58.5% APS (2024) — coerente
+  - Mediana estadual: 92% (AB), 107% (APS) — >100% normal pois capacidade
+    pode exceder pop em municípios pequenos com sobreposição de equipes
+
+JUSTIFICATIVA EPIDEMIOLÓGICA:
+  Cobertura ESF determina a CAPACIDADE DE DETECÇÃO precoce de surtos:
+  - Cobertura alta → mais agentes comunitários → mais notificação
+  - Cobertura baixa → casos sub-reportados → "calmaria aparente" pode
+    mascarar surto real
+  Combinado com latência SINAN (já implementada), o modelo agora tem 2
+  proxies independentes da qualidade do sistema de vigilância municipal.
+
 ================================================================================
 RESUMO DAS FONTES E STATUS
 ================================================================================
@@ -406,6 +461,7 @@ Aglom. subnorm.    2010 e 2022         Download manual ✓ OK (contagem + pop ab
 Áreas IBGE         estático             Script geoftp   ✓ OK (644 km² mediano)
 Densidade pop      estático (de 2023)   Calculada       ✓ OK (100% completude)
 MapBiomas          2015-2024, anual     Script Drive    ✓ OK (5 classes uso solo, ffill 2025)
+ESF (cobertura)    2015-2025, mensal    API REST auto   ✓ OK (132 arq JSON, AB+APS harmonizados)
 
 ================================================================================
 DATASET CONSOLIDADO — municipio_mes.parquet

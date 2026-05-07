@@ -48,6 +48,25 @@ geografia_municipal:
     area_km2: {tipo: float, descricao: "área territorial em km² (IBGE 2024)"}
     densidade_2023: {tipo: float, descricao: "habitantes / km² (último ano IBGE)"}
 
+cobertura_esf:
+  fonte: e_gestor_ms_api_rest
+  periodicidade: mensal
+  observacao: |
+    Cobertura da Atenção Primária à Saúde (ex-Estratégia Saúde da Família).
+    Coletado via API REST descoberta no portal e-Gestor MS:
+      https://relatorioaps-prd.saude.gov.br/cobertura/{ab|aps}
+    Há quebra metodológica em 2021: AB (2015-2020, pcCoberturaAb) → APS
+    (2021-presente, qtCobertura). A coluna esf_metodologia documenta qual
+    foi usada em cada linha — feature útil para o modelo distinguir.
+    Coleta: src/arboviral/scraping/esf_coverage.py (132 arquivos JSON, ~380MB)
+    Parsing: src/arboviral/ingestion/esf.py (harmoniza os 2 formatos)
+  variaveis:
+    esf_metodologia: {tipo: categoria, valores: [AB, APS]}
+    esf_cobertura_pct: {tipo: float, descricao: "% cobertura APS/AB calculado pelo MS"}
+    esf_qt_equipes: {tipo: int, descricao: "número de equipes ESF do município"}
+    esf_qt_capacidade: {tipo: int, descricao: "capacidade total de atendimento (apenas APS, NaN para AB)"}
+    esf_pop_referencia: {tipo: int, descricao: "população usada como denominador pelo MS"}
+
 uso_do_solo:
   fonte: mapbiomas_col_10_1
   periodicidade: anual

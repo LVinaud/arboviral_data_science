@@ -146,6 +146,12 @@ def build() -> pd.DataFrame:
         on=["cod_ibge", "ano"], how="left",
     )
 
+    print("  Juntando ESF (cobertura APS, e-Gestor MS)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "esf.parquet"),
+        on=["cod_ibge", "ano", "mes"], how="left",
+    )
+
     # Ordenação canônica antes do forward-fill (importante para o ffill respeitar a ordem)
     df = df.sort_values(["cod_ibge", "ano", "mes"]).reset_index(drop=True)
 
