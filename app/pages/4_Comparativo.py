@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from app.lib.carregar import carregar_master, carregar_municipios, carregar_predicoes
+from lib.carregar import carregar_master, carregar_municipios, carregar_predicoes
 
 st.set_page_config(page_title="Comparativo", page_icon="📊", layout="wide")
 

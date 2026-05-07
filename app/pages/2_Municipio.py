@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from app.lib.carregar import (
+from lib.carregar import (
     carregar_features,
     carregar_labels,
     carregar_master,
@@ -17,7 +17,7 @@ from app.lib.carregar import (
     carregar_municipios,
     carregar_predicoes,
 )
-from app.lib.predicao import categorizar_risco, justificar_alerta
+from lib.predicao import categorizar_risco, justificar_alerta
 
 st.set_page_config(page_title="Município", page_icon="🔍", layout="wide")
 

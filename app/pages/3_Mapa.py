@@ -8,7 +8,7 @@ municipais (https://github.com/tbrugz/geodata-br).
 import plotly.express as px
 import streamlit as st
 
-from app.lib.carregar import carregar_municipios, carregar_predicoes
+from lib.carregar import carregar_municipios, carregar_predicoes
 
 st.set_page_config(page_title="Mapa", page_icon="🗺️", layout="wide")
 

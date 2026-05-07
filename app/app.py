@@ -16,7 +16,7 @@ Páginas (autodescobertas em app/pages/):
 """
 import streamlit as st
 
-from app.lib.carregar import (
+from lib.carregar import (
     caminho_disponivel,
     carregar_master,
     carregar_municipios,

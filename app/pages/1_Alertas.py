@@ -9,8 +9,8 @@ com features atualizadas — mas a infraestrutura é a mesma.
 import pandas as pd
 import streamlit as st
 
-from app.lib.carregar import carregar_municipios, carregar_predicoes
-from app.lib.predicao import categorizar_risco
+from lib.carregar import carregar_municipios, carregar_predicoes
+from lib.predicao import categorizar_risco
 
 st.set_page_config(page_title="Alertas", page_icon="🚨", layout="wide")
 
