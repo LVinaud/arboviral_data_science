@@ -190,17 +190,32 @@ else:
                 (features["cod_ibge"] == cod_alvo) &
                 (features["ano"] == ano_alvo) &
                 (features["mes"] == mes_alvo)
-            ].drop(columns=["cod_ibge", "ano", "mes"])
+            ].copy()
 
-            # Alinhar colunas com o que o modelo treinou (drop colunas extras se houver)
-            if hasattr(mdl, "feature_names_in_"):
+            # Reproduzir colunas auxiliares que o pipeline de treino adiciona
+            # (vide arboviral.evaluation.splits.adicionar_target_year):
+            #   target_year = ano + (mes == 12) ; target_month = (mes % 12) + 1
+            X_amostra["target_year"] = X_amostra["ano"] + (X_amostra["mes"] == 12).astype(int)
+            X_amostra["target_month"] = (X_amostra["mes"] % 12) + 1
+            X_amostra = X_amostra.drop(columns=["cod_ibge", "ano", "mes"])
+
+            # Alinhar com colunas esperadas pelo modelo. Se o modelo for um Pipeline,
+            # consultar o passo final ("clf") cujo feature_names_in_ é o que importa.
+            cols_esperadas = None
+            if hasattr(mdl, "named_steps") and "clf" in mdl.named_steps:
+                step = mdl.named_steps["clf"]
+                if hasattr(step, "feature_names_in_"):
+                    cols_esperadas = list(step.feature_names_in_)
+            if cols_esperadas is None and hasattr(mdl, "feature_names_in_"):
                 cols_esperadas = list(mdl.feature_names_in_)
-            elif hasattr(mdl.named_steps["clf"], "feature_names_in_"):
-                cols_esperadas = list(mdl.named_steps["clf"].feature_names_in_)
-            else:
+            if cols_esperadas is None:
                 cols_esperadas = X_amostra.columns.tolist()
-            cols_disponiveis = [c for c in cols_esperadas if c in X_amostra.columns]
-            X_amostra = X_amostra[cols_disponiveis]
+
+            # Adiciona colunas faltantes como NaN (imputer no pipeline cuida disso)
+            for c in cols_esperadas:
+                if c not in X_amostra.columns:
+                    X_amostra[c] = float("nan")
+            X_amostra = X_amostra[cols_esperadas]
 
             try:
                 top = justificar_alerta(mdl, X_amostra, top=8)
