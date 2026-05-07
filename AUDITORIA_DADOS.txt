@@ -437,6 +437,61 @@ JUSTIFICATIVA EPIDEMIOLÓGICA:
   Combinado com latência SINAN (já implementada), o modelo agora tem 2
   proxies independentes da qualidade do sistema de vigilância municipal.
 
+--------------------------------------------------------------------------------
+12. PNI/DATASUS — Cobertura vacinal contra febre amarela
+--------------------------------------------------------------------------------
+Origem: Programa Nacional de Imunizações (PNI/MS), publicado via TabNet/DATASUS
+  http://tabnet.datasus.gov.br/cgi/tabcgi.exe?pni/cnv/cpniuf.def
+  Indicador: "Cobertura vacinal" × Imunobiológico = "Febre amarela"
+
+Obtido por: download manual via TabNet (formulário CGI sem endpoint REST estável)
+  reformatado para o padrão da plataforma inteli.gente:
+    codigo_ibge | sigla       | ano  | variavel_valor
+    1100023     | COB_VAC_FA  | 1994 | 30.36
+
+Coleta documentada em: src/arboviral/scraping/pni_febre_amarela.py
+  - Modo "verifica e documenta" (CGI não automatizável trivialmente)
+  - Imprime instruções de obtenção se o arquivo não existir
+  - Alternativa SQL: BasedosDados (br_ms_pni dataset)
+
+Parsing por: src/arboviral/ingestion/vacinacao_fa.py
+  - Filtra SP (codigo_ibge prefixo '35')
+  - Códigos IBGE já em 7 dígitos (sem lookup)
+  - Não preenche gaps (preserva o original); ffill é feito em build_master
+
+Arquivos raw:  data/raw/febre_amarela/COB_VAC_FA.csv (CSV nacional, 90.234 linhas)
+Gerado:        data/interim/vacinacao_fa.parquet (10.546 linhas SP)
+
+Coluna:
+  cob_vac_fa_pct   % da população-alvo imunizada contra febre amarela
+
+Verificação de qualidade — SP:
+  - 645 municípios SP cobertos (100%)
+  - 19 anos com dados na janela 1994-2026 (gaps em 2008, 2010, 2011, 2014, 2017)
+  - Dentro do recorte do master (2015-2025): falta apenas 2017
+  - Mediana SP por ano: declínio observado de ~94% (2002) para ~74% (2025)
+  - Valores >100% ocorrem (~25% das linhas): denominador-alvo do PNI fica
+    abaixo do real em municípios com migração ou estimativa populacional
+    defasada — preservados sem cap (são informativos)
+  - Max 418% (caso extremo); distribuição: p25=57%, p50=81%, p75=100%
+
+DECISÃO METODOLÓGICA — gap 2017:
+  Forward-fill no grupo (cod_ibge) em build_master.py preenche 2017 com o
+  valor de 2016. Justificativa: cobertura vacinal varia <5p.p. interanualmente
+  em períodos sem campanha nacional, e 2017 não teve mudança brusca da
+  política do PNI para SP. Gap 2015-2016 (912+588 linhas faltantes) é
+  remanescente porque ffill não faz backfill — municípios sem registro em
+  2015-2016 ficam NaN nesses meses (afeta 2,5% do master final).
+
+JUSTIFICATIVA EPIDEMIOLÓGICA:
+  Cobertura vacinal diferencia RISCO REAL (transmissão) de RISCO POPULACIONAL
+  (vulnerabilidade). Município em "área de risco" pode ter risco operacional
+  baixo se a população está bem imunizada. Sem essa variável, o modelo confunde
+  os dois cenários. Particularmente relevante após 2017-2019 (surto silvestre
+  SP) e 2025 (ressurgência) — combinado com pct_floresta (MapBiomas), permite
+  ao modelo distinguir "matas + pop não vacinada" (alto risco) de "matas +
+  pop vacinada" (risco controlado).
+
 ================================================================================
 RESUMO DAS FONTES E STATUS
 ================================================================================
@@ -462,6 +517,7 @@ Aglom. subnorm.    2010 e 2022         Download manual ✓ OK (contagem + pop ab
 Densidade pop      estático (de 2023)   Calculada       ✓ OK (100% completude)
 MapBiomas          2015-2024, anual     Script Drive    ✓ OK (5 classes uso solo, ffill 2025)
 ESF (cobertura)    2015-2025, mensal    API REST auto   ✓ OK (132 arq JSON, AB+APS harmonizados)
+PNI vacinação FA   2015-2025, anual     CSV TabNet manual ✓ OK 97.5% (gap 2017 ffill)
 
 ================================================================================
 DATASET CONSOLIDADO — municipio_mes.parquet

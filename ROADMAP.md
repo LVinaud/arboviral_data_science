@@ -58,12 +58,14 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 
 ### 🥈 Top 4-7 — Impacto moderado
 
-#### 4. **Vacinação — cobertura vacinal de febre amarela**
-- **O que adiciona**: % população vacinada contra FA por município, anual.
-- **Por que importa**: diferencia risco real (transmissão) de risco populacional (vulnerabilidade). Sem isso, modelo confunde "área de risco baixo" com "área bem protegida".
-- **Onde obter**: DATASUS PNI (Programa Nacional de Imunizações)
-  - http://pni.datasus.gov.br/
-- **Esforço**: 2 dias
+#### 4. **Vacinação — cobertura vacinal de febre amarela** ✅ CONCLUÍDO
+- **O que adiciona**: 1 coluna `cob_vac_fa_pct` (% da população-alvo imunizada por município/ano).
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/pni_febre_amarela.py` (CSV TabNet em formato inteli.gente)
+  - Parsing: `src/arboviral/ingestion/vacinacao_fa.py` (filtra SP)
+- **Fonte**: DATASUS PNI — `tabnet.datasus.gov.br/cgi/tabcgi.exe?pni/cnv/cpniuf.def`
+- **Cobertura**: 645/645 municípios SP, 1994-2026 (gap 2017 preenchido por ffill no master)
+- **Achado preliminar**: mediana SP cai de ~94% (2002) para ~74% (2025) — declínio relevante para risco populacional
 
 #### 5. **Tempo de notificação (latência SINAN)** ✅ CONCLUÍDO
 - **O que adiciona**: 3 colunas por doença (mediana, p90, n_casos_com_latencia) — proxy de qualidade da vigilância.
@@ -243,6 +245,7 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 | ✅ Feito | 2.2 MapBiomas — uso do solo | Distingue urbano/floresta/agric (drivers vetoriais distintos) |
 | ✅ Feito | 2.5 Latência SINAN | Proxy direto de subnotificação (mediana 3-7d por doença) |
 | ✅ Feito | 2.3 Cobertura ESF/APS | API REST direta (sem Selenium); 132 meses harmonizados |
+| ✅ Feito | 2.4 Vacinação FA (PNI) | Cobertura vacinal anual 1994-2026 (ffill p/ gap 2017) — declínio observado |
 | **Longo** | 3.4 Validação externa MG | Crítico para artigo sério |
 | **Longo** | 3.4 Validação externa 2º estado | Generalização real |
 | **Longo** | Multitask multidoença | Diferencial metodológico para journal |

@@ -37,7 +37,7 @@ Não fazem parsing nem agregação — essa é responsabilidade de
 | IBGE — Áreas dos municípios | `ibge_areas.py` | 2026-05 | `data/raw/ibge_areas/AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls` | `ingestion/densidade.py` | ✅ |
 | MapBiomas — uso do solo | `mapbiomas.py` | 2026-05 | `data/raw/mapbiomas/MAPBIOMAS_COVERAGE_COL_10_1.xlsx` | `ingestion/mapbiomas.py` | ✅ |
 | Cobertura ESF (e-Gestor APS) | `esf_coverage.py` | 2026-05 | `data/raw/esf/cobertura_<ab\|aps>_<YYYYMM>.json` (132 arquivos) | `ingestion/esf.py` | ✅ |
-| Vacinação FA (DATASUS PNI) | `pni_febre_amarela.py` | — | — | — | ⏳ |
+| Vacinação FA (DATASUS PNI) | `pni_febre_amarela.py` | 2026-05 (manual) | `data/raw/febre_amarela/COB_VAC_FA.csv` | `ingestion/vacinacao_fa.py` | ✅ |
 | LIRAa (SES-SP) | `liraa_sp.py` | — | — | — | ⏳ |
 | SIH-SUS (internações) | `sih_arboviroses.py` | — | — | — | ⏳ |
 | Latência SINAN (subnotificação) | (recálculo) | 2026-05 | reusa DBC do SINAN | atualização em `ingestion/sinan.py` | ✅ |

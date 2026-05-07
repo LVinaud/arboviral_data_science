@@ -22,6 +22,9 @@ Decisões metodológicas:
     SINAN dengue/zika/chikungunya usam município de residência. Diferença
     metodológica preservada por ser intrínseca à natureza das doenças (FA é
     silvestre, transmissão fora do município de residência é regra).
+  - Vacinação FA: anual com gap em 2017 dentro de 2015-2025 — forward-fill no
+    grupo cod_ibge para preencher (cobertura vacinal varia <5p.p./ano em
+    janelas sem campanha).
 """
 import pandas as pd
 
@@ -152,12 +155,24 @@ def build() -> pd.DataFrame:
         on=["cod_ibge", "ano", "mes"], how="left",
     )
 
+    print("  Juntando vacinação febre amarela (PNI/DATASUS)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "vacinacao_fa.parquet"),
+        on=["cod_ibge", "ano"], how="left",
+    )
+
     # Ordenação canônica antes do forward-fill (importante para o ffill respeitar a ordem)
     df = df.sort_values(["cod_ibge", "ano", "mes"]).reset_index(drop=True)
 
     # População 2024-2025: IBGE só publica até 2023. Ver decisão metodológica no docstring.
     print("  Forward-fill populacao_estimada para 2024-2025...", flush=True)
     df["populacao_estimada"] = df.groupby("cod_ibge")["populacao_estimada"].ffill()
+
+    # Vacinação FA: PNI tem gap em 2017 dentro da janela 2015-2025 (CSV não cobre o ano).
+    # Forward-fill é seguro: cobertura vacinal varia <5p.p. interanualmente em períodos sem
+    # campanha, e 2017 não teve mudança brusca da política nacional para SP.
+    print("  Forward-fill cob_vac_fa_pct para preencher gap de 2017...", flush=True)
+    df["cob_vac_fa_pct"] = df.groupby("cod_ibge")["cob_vac_fa_pct"].ffill()
 
     # MapBiomas só publica até 2024. Para 2025, ffill (cobertura do solo é estável ano a ano).
     print("  Forward-fill MapBiomas para 2025...", flush=True)

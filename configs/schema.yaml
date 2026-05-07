@@ -48,6 +48,22 @@ geografia_municipal:
     area_km2: {tipo: float, descricao: "área territorial em km² (IBGE 2024)"}
     densidade_2023: {tipo: float, descricao: "habitantes / km² (último ano IBGE)"}
 
+vacinacao_febre_amarela:
+  fonte: datasus_pni
+  periodicidade: anual
+  observacao: |
+    Cobertura vacinal contra febre amarela publicada pelo PNI/DATASUS via
+    TabNet (consulta manual; arquivo em formato inteli.gente).
+    Cobertura: 1994-2026 com gaps (anos sem campanha agregada).
+    Dentro da janela 2015-2025 falta 2017 — preenchido por forward-fill
+    em build_master (cobertura varia <5p.p./ano em períodos sem campanha).
+    Valores >100% ocasionais: denominador-alvo (estimado pelo PNI) abaixo
+    do real em municípios com migração ou estimativa defasada — preservados.
+    Coleta: src/arboviral/scraping/pni_febre_amarela.py (verifica + documenta)
+    Parsing: src/arboviral/ingestion/vacinacao_fa.py (filtra SP)
+  variaveis:
+    cob_vac_fa_pct: {tipo: float, descricao: "% da população-alvo imunizada contra febre amarela (PNI)"}
+
 cobertura_esf:
   fonte: e_gestor_ms_api_rest
   periodicidade: mensal
