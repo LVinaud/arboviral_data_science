@@ -40,7 +40,7 @@ Não fazem parsing nem agregação — essa é responsabilidade de
 | Vacinação FA (DATASUS PNI) | `pni_febre_amarela.py` | — | — | — | ⏳ |
 | LIRAa (SES-SP) | `liraa_sp.py` | — | — | — | ⏳ |
 | SIH-SUS (internações) | `sih_arboviroses.py` | — | — | — | ⏳ |
-| Latência SINAN (subnotificação) | (recálculo) | — | reusa DBC do SINAN | atualização em `ingestion/sinan.py` | ⏳ |
+| Latência SINAN (subnotificação) | (recálculo) | 2026-05 | reusa DBC do SINAN | atualização em `ingestion/sinan.py` | ✅ |
 
 ## Como rodar
 

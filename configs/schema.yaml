@@ -79,6 +79,9 @@ arboviroses:
     "{doenca}_casos_provaveis": {tipo: int, descricao: "casos com classificação provável (apenas SINAN)"}
     "{doenca}_obitos": {tipo: int}
     "{doenca}_internacoes": {tipo: int, descricao: "apenas SINAN (HOSPITALIZ); não disponível para febre amarela"}
+    "{doenca}_latencia_mediana": {tipo: float, descricao: "mediana DT_NOTIFIC - DT_SIN_PRI em dias (proxy de qualidade da vigilância)"}
+    "{doenca}_latencia_p90": {tipo: float, descricao: "percentil 90 da latência (cauda longa, indica casos atrasados)"}
+    "{doenca}_n_casos_com_latencia": {tipo: int, descricao: "contagem de casos com DT_NOTIFIC e DT_SIN_PRI válidas"}
   features_derivadas_em_features:
     coef_incidencia: {tipo: float, descricao: "casos por 100 mil hab — calculado a partir de casos / populacao_estimada"}
     taxa_letalidade_pct: {tipo: float}

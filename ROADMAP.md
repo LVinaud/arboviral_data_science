@@ -64,11 +64,13 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
   - http://pni.datasus.gov.br/
 - **Esforço**: 2 dias
 
-#### 5. **Tempo de notificação (latência SINAN)**
-- **O que adiciona**: feature derivada — média do delta `DT_NOTIFIC - DT_SIN_PRI` por município/mês.
-- **Por que importa**: proxy direto de subnotificação. Município com latência alta tem casos sub-reportados, então casos baixos podem mascarar surtos reais.
-- **Onde obter**: já temos! Calculável a partir dos arquivos DBC do SINAN que já baixamos.
-- **Esforço**: 1 dia (modificar `sinan.py` para preservar essa info na agregação)
+#### 5. **Tempo de notificação (latência SINAN)** ✅ CONCLUÍDO
+- **O que adiciona**: 3 colunas por doença (mediana, p90, n_casos_com_latencia) — proxy de qualidade da vigilância.
+- **Implementado em**: `src/arboviral/ingestion/sinan.py` (estendido para extrair DT_NOTIFIC - DT_SIN_PRI por caso, filtrar valores absurdos, agregar por município/mês).
+- **Cobertura**: ~99.9% dos casos têm ambas as datas; mediana SP:
+  - Dengue: 3 dias (sistema funcionando bem)
+  - Zika: 4 dias
+  - Chikungunya: 7 dias (doença menos lembrada, notificação mais lenta)
 
 #### 6. **Mobilidade pendular intermunicipal**
 - **O que adiciona**: matriz origem-destino de deslocamentos (estudo, trabalho).
@@ -238,6 +240,7 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 | **Médio** | 2.5 Latência SINAN | "Fruta baixa", proxy de subnotificação |
 | ✅ Feito | 2.9 Densidade populacional | Driver direto de transmissão urbana |
 | ✅ Feito | 2.2 MapBiomas — uso do solo | Distingue urbano/floresta/agric (drivers vetoriais distintos) |
+| ✅ Feito | 2.5 Latência SINAN | Proxy direto de subnotificação (mediana 3-7d por doença) |
 | **Longo** | 3.4 Validação externa MG | Crítico para artigo sério |
 | **Longo** | 3.4 Validação externa 2º estado | Generalização real |
 | **Longo** | Multitask multidoença | Diferencial metodológico para journal |

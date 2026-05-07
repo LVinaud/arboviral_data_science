@@ -56,10 +56,14 @@ def _grade_base() -> pd.DataFrame:
 def _sinan_prefixado(doenca: str) -> pd.DataFrame:
     df = pd.read_parquet(INTERIM / f"sinan_{doenca}.parquet")
     return df.rename(columns={
-        "casos_notificados": f"{doenca}_casos",
-        "casos_provaveis":   f"{doenca}_casos_provaveis",
-        "obitos":            f"{doenca}_obitos",
-        "internacoes":       f"{doenca}_internacoes",
+        "casos_notificados":      f"{doenca}_casos",
+        "casos_provaveis":        f"{doenca}_casos_provaveis",
+        "obitos":                 f"{doenca}_obitos",
+        "internacoes":            f"{doenca}_internacoes",
+        # Latência (proxy de qualidade da vigilância / subnotificação)
+        "latencia_mediana_dias":  f"{doenca}_latencia_mediana",
+        "latencia_p90_dias":      f"{doenca}_latencia_p90",
+        "n_casos_com_latencia":   f"{doenca}_n_casos_com_latencia",
     })
 
 

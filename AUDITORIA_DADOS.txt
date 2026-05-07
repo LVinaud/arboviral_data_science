@@ -39,6 +39,28 @@ Limitações:
   - Chikungunya e zika têm anos com pouca cobertura (2015-2016)
   - internacoes = NaN em anos/doenças onde HOSPITALIZ não foi registrado
 
+ATUALIZAÇÃO 2026-05: estendido para extrair LATÊNCIA por caso individual.
+  Cada DBC contém DT_NOTIFIC e DT_SIN_PRI. Calculamos:
+    delta_dias = DT_NOTIFIC - DT_SIN_PRI por caso
+  Filtros aplicados: 0 ≤ delta ≤ 365 dias (rejeita datas inconsistentes).
+  Agregamos por (cod_ibge, ano, mes) em mediana e p90.
+
+  Novas colunas em sinan_<doenca>.parquet:
+    latencia_mediana_dias    mediana de dias entre sintomas e notificação
+    latencia_p90_dias        percentil 90 (cauda longa)
+    n_casos_com_latencia     contagem de casos com ambas as datas válidas
+
+  Estatísticas observadas (mediana de medianas por município/mês):
+    Dengue:       3 dias mediana, p90 ~7 (sistema funcionando bem)
+    Zika:         4 dias mediana, p90 ~6
+    Chikungunya:  7 dias mediana, p90 ~10 (doença menos lembrada → mais lenta)
+
+  Justificativa: latência é proxy DIRETO de qualidade da vigilância e de
+  subnotificação. Município com latência alta tem casos chegando atrasados
+  (aparente "calmaria" pode esconder surto real). Modelo pode usar isso
+  para distinguir "casos baixos = tudo bem" de "casos baixos + latência alta
+  = preciso ficar alerta".
+
 --------------------------------------------------------------------------------
 1b. Febre Amarela — Ministério da Saúde / SVS (Dados Abertos)
 --------------------------------------------------------------------------------

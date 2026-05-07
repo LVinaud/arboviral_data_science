@@ -58,7 +58,7 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 `src/arboviral/transform/build_master.py` gera `data/processed/municipio_mes.parquet`:
 
 - **85.140 linhas** · 645 municípios SP × 11 anos (2015–2025) × 12 meses
-- **64 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação, **área e densidade populacional**, **5 categorias de uso do solo (MapBiomas)**
+- **73 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + **9 de latência SINAN (proxy de subnotificação)** + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação, área e densidade populacional, 5 categorias de uso do solo (MapBiomas)
 
 **Decisões metodológicas documentadas:**
 - *População 2024–2025*: forward-fill a partir das estimativas IBGE de 2023 (IBGE só publica até 2023). Alternativa rejeitada: ajustar modelo de tendência populacional. Forward-fill foi escolhida por simplicidade e por ser conservadora — variação populacional municipal anual é tipicamente <2%, dentro da margem de erro da própria estimativa do IBGE.
