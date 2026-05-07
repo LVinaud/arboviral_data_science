@@ -87,10 +87,6 @@ with tab_curto:
 
 with tab_medio:
     st.markdown("### Top 10 fontes de dados a adicionar")
-    st.info(
-        "Listadas em ordem decrescente de impacto esperado em AUPRC. "
-        "Cada uma expande o poder preditivo e reduz NaN no dataset."
-    )
     st.markdown(
         _extrair_secao(texto, "## 2. Médio prazo", "## 3. Longo prazo")
             .replace("## 2. Médio prazo — Top 10 fontes de dados a adicionar", "")
