@@ -38,14 +38,14 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 - **Formato típico**: PDF/Excel por município (chato de extrair, mas estruturado)
 - **Esforço estimado**: 1 semana (web scraping + parser)
 
-#### 2. **MapBiomas — uso e cobertura do solo**
-- **O que adiciona**: % de cobertura por classe (mata, agropastoril, urbano, água) por município, anual.
-- **Por que importa**: áreas de mata = transmissão silvestre (FA, Mayaro). Urbanização rápida = vetor urbano. Agricultura = uso de pesticidas e modificação de habitat.
-- **Onde obter**:
-  - https://mapbiomas.org/ (gratuito, abertos)
-  - Estatísticas municipais já agregadas em CSV
-- **Formato**: CSV download direto
-- **Esforço**: 2 dias (download + integração)
+#### 2. **MapBiomas — uso e cobertura do solo** ✅ CONCLUÍDO
+- **O que adiciona**: % de cobertura por classe (floresta, agricultura, não vegetado, água, natural não florestal) por município, anual 2015-2024.
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/mapbiomas.py` (download Google Drive, ~75 MB)
+  - Parsing: `src/arboviral/ingestion/mapbiomas.py`
+- **Fonte**: MapBiomas Brasil Coleção 10.1 (DOI: 10.58053/MapBiomas/SJZOLT)
+- **Cobertura**: 645/645 municípios SP × 10 anos, 100% completude
+- **Estatísticas SP**: agricultura 74% mediano, floresta 9.4% mediano, urbanizado 1.3% mediano (download + integração)
 
 #### 3. **Cobertura ESF (Estratégia Saúde da Família)**
 - **O que adiciona**: % de cobertura ESF por município (mensal/anual).
@@ -237,6 +237,7 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 | **Médio** | 2.3 Cobertura ESF | Controla viés de detecção |
 | **Médio** | 2.5 Latência SINAN | "Fruta baixa", proxy de subnotificação |
 | ✅ Feito | 2.9 Densidade populacional | Driver direto de transmissão urbana |
+| ✅ Feito | 2.2 MapBiomas — uso do solo | Distingue urbano/floresta/agric (drivers vetoriais distintos) |
 | **Longo** | 3.4 Validação externa MG | Crítico para artigo sério |
 | **Longo** | 3.4 Validação externa 2º estado | Generalização real |
 | **Longo** | Multitask multidoença | Diferencial metodológico para journal |

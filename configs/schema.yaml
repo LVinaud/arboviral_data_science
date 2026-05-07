@@ -48,6 +48,24 @@ geografia_municipal:
     area_km2: {tipo: float, descricao: "área territorial em km² (IBGE 2024)"}
     densidade_2023: {tipo: float, descricao: "habitantes / km² (último ano IBGE)"}
 
+uso_do_solo:
+  fonte: mapbiomas_col_10_1
+  periodicidade: anual
+  observacao: |
+    Cobertura e uso da terra por município (MapBiomas Coleção 10.1).
+    Cobertura: 2015-2024. Para 2025, aplicamos forward-fill (cobertura
+    do solo varia <1%/ano em SP, ffill é conservadora).
+    Coleta: src/arboviral/scraping/mapbiomas.py (Google Drive, ~75 MB).
+    Parsing: src/arboviral/ingestion/mapbiomas.py (filtra SP, agrega
+    por class_level_1, calcula percentuais).
+    DOI: https://doi.org/10.58053/MapBiomas/SJZOLT
+  variaveis:
+    pct_floresta: {tipo: float, descricao: "% área com floresta natural"}
+    pct_agricultura: {tipo: float, descricao: "% área com agropecuária (pastagem + lavoura + silvicultura)"}
+    pct_nao_vegetado: {tipo: float, descricao: "% área urbanizada / não vegetada (cidades, infraestrutura, mineração)"}
+    pct_agua: {tipo: float, descricao: "% água / ambiente marinho"}
+    pct_natural_nao_florestal: {tipo: float, descricao: "% formação natural não florestal (cerrado aberto, campos, etc.)"}
+
 arboviroses:
   fonte: sinan_datasus
   periodicidade: mensal

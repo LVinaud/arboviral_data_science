@@ -49,6 +49,7 @@ O pipeline de ingestão está **100% implementado** para todos os 645 município
 | `sinisa.parquet` | SINISA | 2023–2024, anual | Download manual |
 | `habitacao.parquet` | IBGE Censos 2010 e 2022 | estático | Download manual (4 tabelas SIDRA) |
 | `densidade.parquet` | IBGE — área dos municípios + estimativa pop | estático | Script automático (`scraping/ibge_areas.py`) |
+| `mapbiomas.parquet` | MapBiomas Brasil — Coleção 10.1 | 2015–2024, anual | Script automático (`scraping/mapbiomas.py`) |
 
 Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 
@@ -57,7 +58,7 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 `src/arboviral/transform/build_master.py` gera `data/processed/municipio_mes.parquet`:
 
 - **85.140 linhas** · 645 municípios SP × 11 anos (2015–2025) × 12 meses
-- **59 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação, **área e densidade populacional**
+- **64 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação, **área e densidade populacional**, **5 categorias de uso do solo (MapBiomas)**
 
 **Decisões metodológicas documentadas:**
 - *População 2024–2025*: forward-fill a partir das estimativas IBGE de 2023 (IBGE só publica até 2023). Alternativa rejeitada: ajustar modelo de tendência populacional. Forward-fill foi escolhida por simplicidade e por ser conservadora — variação populacional municipal anual é tipicamente <2%, dentro da margem de erro da própria estimativa do IBGE.
@@ -320,7 +321,8 @@ arboviral_data_science/
 │   ├── io.py                    # caminhos canônicos
 │   ├── scraping/                # NOVO — coleta de dados externos para data/raw/
 │   │   ├── README.md            # tabela de fontes, status, datas de coleta
-│   │   └── ibge_areas.py        # IBGE — áreas territoriais por município
+│   │   ├── ibge_areas.py        # IBGE — áreas territoriais por município
+│   │   └── mapbiomas.py         # MapBiomas — uso e cobertura do solo (Coleção 10.1)
 │   ├── ingestion/               # 1 módulo por fonte (raw → interim)
 │   │   ├── sinan.py + sinan_ftp.py + sinan_api.py     # dengue, zika, chikungunya
 │   │   ├── febre_amarela.py     # FA (dados abertos MS — não está no FTP SINAN)
@@ -331,7 +333,8 @@ arboviral_data_science/
 │   │   ├── socioeconomico.py    # IDH-M + CAPAG
 │   │   ├── snis.py              # água e esgoto (SINISA)
 │   │   ├── habitacao.py         # aglomerados subnormais e favelas (Censos 2010, 2022)
-│   │   └── densidade.py         # área (IBGE) + densidade populacional
+│   │   ├── densidade.py         # área (IBGE) + densidade populacional
+│   │   └── mapbiomas.py         # uso/cobertura do solo (5 classes %, anual)
 │   ├── transform/build_master.py    # consolida 10 interim → municipio_mes.parquet
 │   ├── labels/                  # rótulos de surto (4 definições, RQ4)
 │   │   ├── outbreak.py          # funções por definição (canal, zscore, inc100, inc300)

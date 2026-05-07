@@ -136,12 +136,26 @@ def build() -> pd.DataFrame:
         on="cod_ibge", how="left",
     )
 
+    print("  Juntando MapBiomas (uso do solo)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "mapbiomas.parquet"),
+        on=["cod_ibge", "ano"], how="left",
+    )
+
     # Ordenação canônica antes do forward-fill (importante para o ffill respeitar a ordem)
     df = df.sort_values(["cod_ibge", "ano", "mes"]).reset_index(drop=True)
 
     # População 2024-2025: IBGE só publica até 2023. Ver decisão metodológica no docstring.
     print("  Forward-fill populacao_estimada para 2024-2025...", flush=True)
     df["populacao_estimada"] = df.groupby("cod_ibge")["populacao_estimada"].ffill()
+
+    # MapBiomas só publica até 2024. Para 2025, ffill (cobertura do solo é estável ano a ano).
+    print("  Forward-fill MapBiomas para 2025...", flush=True)
+    cols_mb = [c for c in df.columns if c.startswith("pct_")
+               and c not in ("pct_pop_favelas_2022", "pop_aglom_subnorm_2010")]
+    cols_mb = [c for c in cols_mb if c in df.columns and not c.startswith("pop_")]
+    for c in cols_mb:
+        df[c] = df.groupby("cod_ibge")[c].ffill()
     # pib_per_capita também recalculado depois do ffill quando pib_mil_reais existir
     # (mas pib_mil_reais permanece NaN para 2024-2025; OK — variável separada)
 

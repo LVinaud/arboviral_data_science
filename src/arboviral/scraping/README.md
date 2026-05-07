@@ -35,7 +35,7 @@ Não fazem parsing nem agregação — essa é responsabilidade de
 | Fonte | Script | Última coleta | Output bruto | Parser | Status |
 |---|---|---|---|---|---|
 | IBGE — Áreas dos municípios | `ibge_areas.py` | 2026-05 | `data/raw/ibge_areas/AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls` | `ingestion/densidade.py` | ✅ |
-| MapBiomas — uso do solo | `mapbiomas.py` | — | — | — | ⏳ |
+| MapBiomas — uso do solo | `mapbiomas.py` | 2026-05 | `data/raw/mapbiomas/MAPBIOMAS_COVERAGE_COL_10_1.xlsx` | `ingestion/mapbiomas.py` | ✅ |
 | Cobertura ESF (e-Gestor AB) | `esf_coverage.py` | — | — | — | ⏳ |
 | Vacinação FA (DATASUS PNI) | `pni_febre_amarela.py` | — | — | — | ⏳ |
 | LIRAa (SES-SP) | `liraa_sp.py` | — | — | — | ⏳ |
