@@ -92,11 +92,14 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 - **Onde obter**: SECTUR municipais (manual), agendas culturais (Embratur).
 - **Esforço**: 1 semana (curadoria manual; pouco escalável)
 
-#### 9. **Densidade populacional e uso urbano**
-- **O que adiciona**: `pop / area_km2`, % urbanização.
-- **Por que importa**: hoje só temos `populacao_estimada`. Densidade é mais explicativa para vetor urbano (densidade alta favorece *Aedes aegypti*).
-- **Onde obter**: IBGE — área já está em outras tabelas SIDRA.
-- **Esforço**: 1 dia
+#### 9. **Densidade populacional e uso urbano** ✅ CONCLUÍDO
+- **O que adiciona**: `area_km2`, `densidade_2023` (hab/km²).
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/ibge_areas.py`
+  - Parsing: `src/arboviral/ingestion/densidade.py`
+- **Fonte**: FTP IBGE — `geoftp.ibge.gov.br/.../areas_territoriais/2024/AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls`
+- **Cobertura**: 645/645 municípios SP, 100% completude
+- **Estatísticas**: densidades de 3.6 hab/km² (interior) a 14.593 hab/km² (metropolitano)
 
 #### 10. **Cobertura vegetal local — NDVI (índice de vegetação)**
 - **O que adiciona**: NDVI mensal por município (média de pixels do MODIS/Landsat).
@@ -233,6 +236,7 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 | **Médio** | 2.2 MapBiomas | Drivers ambientais, interpretação |
 | **Médio** | 2.3 Cobertura ESF | Controla viés de detecção |
 | **Médio** | 2.5 Latência SINAN | "Fruta baixa", proxy de subnotificação |
+| ✅ Feito | 2.9 Densidade populacional | Driver direto de transmissão urbana |
 | **Longo** | 3.4 Validação externa MG | Crítico para artigo sério |
 | **Longo** | 3.4 Validação externa 2º estado | Generalização real |
 | **Longo** | Multitask multidoença | Diferencial metodológico para journal |

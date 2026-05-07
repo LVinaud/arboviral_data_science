@@ -9,7 +9,7 @@ Fontes e estratégia de join:
   mensal  (cod_ibge, ano, mes): sinan_dengue, sinan_zika, sinan_chikungunya,
                                  febre_amarela, nasa_power, saude
   anual   (cod_ibge, ano):      ibge, socioeconomico, sinisa
-  estática (cod_ibge):          munic, habitacao
+  estática (cod_ibge):          munic, habitacao, densidade
   lookup  (cod_ibge):           nome, lat, lon, estação INMET
 
 Decisões metodológicas:
@@ -127,6 +127,12 @@ def build() -> pd.DataFrame:
     print("  Juntando habitação (favelas/aglomerados)...", flush=True)
     df = df.merge(
         pd.read_parquet(INTERIM / "habitacao.parquet"),
+        on="cod_ibge", how="left",
+    )
+
+    print("  Juntando densidade populacional (área IBGE)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "densidade.parquet"),
         on="cod_ibge", how="left",
     )
 

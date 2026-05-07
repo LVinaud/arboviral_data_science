@@ -277,6 +277,41 @@ HISTÓRICO: versões anteriores dessas tabelas tinham a variável "percentual do
   total geral" — artefato SIDRA que retorna 100 para a linha de soma por sexo.
   As tabelas foram substituídas pelo aluno com a variável "população absoluta".
 
+--------------------------------------------------------------------------------
+9. IBGE — Áreas territoriais e densidade populacional
+--------------------------------------------------------------------------------
+Origem: FTP do IBGE — geoftp.ibge.gov.br
+  https://geoftp.ibge.gov.br/organizacao_do_territorio/estrutura_territorial/areas_territoriais/
+  Arquivo: AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls (aba AR_BR_MUN_2024)
+  Coluna CD_MUN é código IBGE 7 dígitos; AR_MUN_2024 é a área em km².
+
+Coleta automatizada por: src/arboviral/scraping/ibge_areas.py
+Parsing por:              src/arboviral/ingestion/densidade.py
+
+Arquivos raw:    data/raw/ibge_areas/AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls
+Gerado:          data/interim/densidade.parquet (645 linhas, 100% completude)
+
+Colunas:
+  area_km2          float   Área territorial em km² (IBGE 2024)
+  densidade_2023    float   Habitantes / km² em 2023 (último ano IBGE)
+
+Verificação de qualidade:
+  - 645 municípios SP cobertos sem nenhum NaN
+  - Áreas: mín 3.6 km² (Águas de São Pedro), máx 1.978 km² (Iguape)
+  - Densidades: mín 3.6 hab/km² (interior), máx 14.593 hab/km²
+    (zona urbana metropolitana — São Caetano do Sul)
+  - Mediana: 41.6 hab/km² (típico de município interiorano)
+
+JUSTIFICATIVA EPIDEMIOLÓGICA:
+  Densidade populacional é proxy direto da densidade de criadouros
+  potenciais e da taxa de contato humano-vetor. Município denso favorece
+  transmissão urbana de Aedes; município esparso atenua. Hipótese a ser
+  validada via SHAP estratificado (RQ2).
+
+NOTA: A área é praticamente estática (mudanças apenas em casos raros de
+emancipação ou conurbação). Por isso usamos o arquivo do ano de 2024
+mesmo que a cobertura do dataset seja 2015-2025.
+
 ================================================================================
 RESUMO DAS FONTES E STATUS
 ================================================================================
@@ -298,6 +333,8 @@ IDH-M              2010 (censo)        Download manual ✓ OK (estático)
 CAPAG              2018-2025, anual    Download manual ✓ OK (cobertura variável)
 SINISA             2023-2024, anual    Download manual ✓ OK
 Aglom. subnorm.    2010 e 2022         Download manual ✓ OK (contagem + pop absoluta)
+Áreas IBGE         estático             Script geoftp   ✓ OK (644 km² mediano)
+Densidade pop      estático (de 2023)   Calculada       ✓ OK (100% completude)
 
 ================================================================================
 DATASET CONSOLIDADO — municipio_mes.parquet

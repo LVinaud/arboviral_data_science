@@ -36,6 +36,18 @@ porte:
   variaveis:
     populacao_estimada: {tipo: int}
 
+geografia_municipal:
+  fonte: ibge_geoftp
+  periodicidade: estatica
+  observacao: |
+    Área territorial obtida do FTP do IBGE (geoftp.ibge.gov.br),
+    aba AR_BR_MUN do arquivo AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls.
+    Densidade calculada como pop_2023 / area_km2 (último ano oficial IBGE).
+    Coleta automatizada em src/arboviral/scraping/ibge_areas.py.
+  variaveis:
+    area_km2: {tipo: float, descricao: "área territorial em km² (IBGE 2024)"}
+    densidade_2023: {tipo: float, descricao: "habitantes / km² (último ano IBGE)"}
+
 arboviroses:
   fonte: sinan_datasus
   periodicidade: mensal
