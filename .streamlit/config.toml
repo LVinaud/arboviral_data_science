@@ -1,0 +1,17 @@
+# Tema do app Streamlit — alinhado ao design system do mockup.
+# CSS detalhado em app/static/styles.css (carregado via app/lib/tema.py).
+# Aqui ficam apenas as configurações que o Streamlit honra nativamente.
+
+[theme]
+base = "light"
+primaryColor = "#ea580c"            # laranja queimado (acento)
+backgroundColor = "#f8fafc"         # slate-50
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0f172a"               # midnight ink
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

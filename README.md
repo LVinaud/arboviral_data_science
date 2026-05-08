@@ -2,6 +2,10 @@
 
 > Plataforma Automatizada para Prevenção e Resposta a Arboviroses Usando Inteligência Artificial
 
+> **Branches:**
+> - `main` — pipeline de dados, rotulagem e modelagem (ciência de dados pura, autossuficiente)
+> - `experimental/platform-app` — interface Streamlit para gestores; depende deste pacote, mas este pacote NÃO depende dela. Veja [`app/README.md`](app/README.md) na branch experimental.
+
 Iniciação Científica (Programa Unificado de Bolsas — PUB) desenvolvida no **Instituto de Ciências Matemáticas e de Computação da USP (ICMC-USP)** em São Carlos.
 
 - **Aluno:** Lázaro Pereira Vinaud Neto
