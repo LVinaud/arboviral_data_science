@@ -1,3 +1,7 @@
+---
+marp: false
+---
+
 # Relatório de Auditoria do Pipeline de Dados — Arboviroses SP
 
 **Gerado em**: 2026-05-06
