@@ -80,12 +80,13 @@ st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 if df.empty:
     st.warning("Sem dados para essa combinação.")
 else:
+    # Pivota pelo mês PREDITO — para fold=2024 isso dá Jan→Dez/2024 alinhado
+    # com o ano de teste, em vez de Dez/2023→Nov/2024 (mês das features).
     pivot = (
-        df.pivot_table(index="doenca", columns="mes",
+        df.pivot_table(index="doenca", columns="target_mes",
                        values="prob_predita", aggfunc="mean")
         .reindex(index=["dengue", "chikungunya", "zika", "febre_amarela"])
     )
-    # Colunas viram nomes de mês abreviados; linhas viram nome humano da doença
     pivot.columns = [nome_mes(c)[:3] for c in pivot.columns]
 
     fig = go.Figure(data=go.Heatmap(

@@ -74,18 +74,20 @@ with st.sidebar:
 
     meses_disp = sorted(
         preds[(preds["doenca"] == doenca) & (preds["definicao"] == definicao)
-              & (preds["modelo"] == modelo) & (preds["fold_ano_teste"] == fold)]["mes"].unique()
+              & (preds["modelo"] == modelo) & (preds["fold_ano_teste"] == fold)]["target_mes"].unique()
     )
     mes_sel = st.selectbox(
-        "Mês de referência", ["Todos"] + list(meses_disp), index=0,
+        "Mês predito", ["Todos"] + list(meses_disp), index=0,
         format_func=lambda x: "Todos os meses" if x == "Todos" else nome_mes(x),
-        help=("Mês em que a predição foi feita; o alerta vale para o mês seguinte. "
-              "Em produção, este filtro selecionaria o mês corrente."),
+        help=("Mês para o qual o alerta é emitido (alvo da predição). "
+              "Em produção, corresponderia ao próximo mês."),
     )
     mes = None if mes_sel == "Todos" else int(mes_sel)
 
     risco_min = st.slider("Probabilidade mínima exibida", 0.0, 1.0, 0.5, 0.05)
 
+# fold_ano_teste já é o ano do mês predito (target_year), então casa com `mes`
+# (que agora é target_mes) — não há mais defasagem entre o rótulo e a predição.
 _recorte_mes = ano_mes_humano(fold, mes) if mes else f"{fold} (todos os meses)"
 
 # --- Header ---
@@ -94,7 +96,7 @@ page_header(
     descricao=(
         f"Municípios em risco previsto · {_recorte_mes} · "
         f"{nome_doenca(doenca)} · {nome_definicao(definicao)} · {nome_modelo(modelo)}. "
-        "Cada linha é uma predição mensal: probabilidade de surto no mês seguinte ao mês exibido."
+        "Cada linha é uma predição mensal: probabilidade de surto para o mês indicado."
     ),
     crumbs=f"PLATAFORMA / ALERTAS / {nome_doenca(doenca).upper()} / "
            f"{_recorte_mes.upper()}",
@@ -109,7 +111,7 @@ df = preds[
     & (preds["prob_predita"] >= risco_min)
 ].copy()
 if mes is not None:
-    df = df[df["mes"] == mes]
+    df = df[df["target_mes"] == mes]
 
 df = df.merge(municipios[["cod_ibge", "nome_municipio"]], on="cod_ibge", how="left")
 # zip(*serie_vazia) retorna [], que não pode ser unpacked em 2 — proteger o caso
@@ -143,15 +145,11 @@ if df.empty:
     st.info("Nenhuma predição acima do limiar selecionado.")
 else:
     df_display = df[[
-        "categoria", "nome_municipio", "cod_ibge", "ano", "mes",
+        "categoria", "nome_municipio", "cod_ibge", "target_ano", "target_mes",
         "prob_predita", "y_true", "surto_atual",
     ]].copy()
-    # Mês predito = mês seguinte ao mês exibido (em dezembro vira janeiro do próximo ano)
     df_display["mes_predito"] = df_display.apply(
-        lambda r: ano_mes_humano(
-            int(r["ano"]) + (1 if int(r["mes"]) == 12 else 0),
-            (int(r["mes"]) % 12) + 1,
-        ),
+        lambda r: ano_mes_humano(int(r["target_ano"]), int(r["target_mes"])),
         axis=1,
     )
     df_display["surto_real"] = df_display["y_true"].map({1: "Sim", 0: "Não"})

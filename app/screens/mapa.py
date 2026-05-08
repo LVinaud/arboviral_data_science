@@ -62,21 +62,23 @@ with st.sidebar:
 
     meses_disp = sorted(
         preds[(preds["doenca"] == doenca) & (preds["definicao"] == definicao)
-              & (preds["modelo"] == modelo) & (preds["fold_ano_teste"] == fold)]["mes"].unique()
+              & (preds["modelo"] == modelo) & (preds["fold_ano_teste"] == fold)]["target_mes"].unique()
     )
     mes = st.selectbox(
-        "Mês de referência", meses_disp,
+        "Mês predito", meses_disp,
         index=len(meses_disp) // 2,
         format_func=nome_mes,
+        help="Mês para o qual o mapa mostra a probabilidade prevista (alvo do alerta).",
     )
 
 # --- Filtrar predições ---
+# fold_ano_teste = target_year, então (fold, mes) já refere-se ao mês predito.
 df = preds[
     (preds["doenca"] == doenca)
     & (preds["definicao"] == definicao)
     & (preds["modelo"] == modelo)
     & (preds["fold_ano_teste"] == fold)
-    & (preds["mes"] == mes)
+    & (preds["target_mes"] == mes)
 ].copy()
 df = df.merge(
     municipios[["cod_ibge", "nome_municipio", "lat", "lon"]],

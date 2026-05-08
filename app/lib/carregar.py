@@ -59,8 +59,17 @@ def carregar_predicoes() -> pd.DataFrame:
     """predictions.parquet — predições de TODOS os modelos em todos os folds.
 
     Permite mostrar histórico de alertas que o sistema teria emitido.
+
+    Como o alvo é surto(t+1), `(ano, mes)` no parquet referem-se ao mês das
+    features (instante em que o sistema "olha"). Adicionamos `target_ano` e
+    `target_mes` (mês predito = t+1) para que as telas exibam o mês ao qual
+    o alerta de fato corresponde — caso contrário fold=2024 começaria em
+    Dez/2023 (features que predizem Jan/2024).
     """
-    return pd.read_parquet(PROCESSED / "predictions.parquet")
+    df = pd.read_parquet(PROCESSED / "predictions.parquet")
+    df["target_ano"] = df["ano"] + (df["mes"] == 12).astype(int)
+    df["target_mes"] = (df["mes"] % 12) + 1
+    return df
 
 
 @st.cache_resource(show_spinner="Carregando modelos treinados...")

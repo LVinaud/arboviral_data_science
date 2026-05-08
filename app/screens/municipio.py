@@ -82,16 +82,18 @@ with st.sidebar:
 
     # Mês foca o SHAP — o gráfico de 12 meses continua mostrando o ano todo,
     # mas a justificativa SHAP analisa esse mês específico (em vez do pico).
+    # Selecionamos pelo mês PREDITO (target_mes), não pelo mês das features.
     meses_disp_mun = sorted(preds[
         (preds["cod_ibge"] == cod) & (preds["doenca"] == doenca)
         & (preds["definicao"] == definicao) & (preds["modelo"] == modelo)
         & (preds["fold_ano_teste"] == fold)
-    ]["mes"].unique())
+    ]["target_mes"].unique())
     mes_foco_sel = st.selectbox(
         "Mês de análise (SHAP)", ["Pico do ano"] + list(meses_disp_mun), index=0,
         format_func=lambda x: x if x == "Pico do ano" else nome_mes(x),
-        help=("Mês usado pela justificativa SHAP. 'Pico do ano' = mês com a "
-              "maior probabilidade prevista. Em produção corresponde ao mês corrente."),
+        help=("Mês predito (alvo do alerta) usado pela justificativa SHAP. "
+              "'Pico do ano' = mês com a maior probabilidade prevista. "
+              "Em produção corresponde ao mês corrente."),
     )
     mes_foco = None if mes_foco_sel == "Pico do ano" else int(mes_foco_sel)
 
@@ -127,20 +129,23 @@ preds_mun = preds[
     & (preds["definicao"] == definicao)
     & (preds["modelo"] == modelo)
     & (preds["fold_ano_teste"] == fold)
-].sort_values(["ano", "mes"]).copy()
+].sort_values(["target_ano", "target_mes"]).copy()
 
 if preds_mun.empty:
     st.warning("Nenhuma predição encontrada para essa combinação.")
     st.stop()
 
+# Eixo temporal = mês PREDITO (t+1). Assim fold=2024 mostra Jan→Dez/2024,
+# em vez de Dez/2023 → Nov/2024 (que é o mês das features).
 preds_mun["data"] = pd.to_datetime(
-    preds_mun["ano"].astype(str) + "-" + preds_mun["mes"].astype(str).str.zfill(2)
+    preds_mun["target_ano"].astype(str) + "-"
+    + preds_mun["target_mes"].astype(str).str.zfill(2)
 )
 
 # --- Mês de foco do SHAP ---
-# Se o usuário escolheu um mês específico, foca nele; senão, pega o pico do ano.
-if mes_foco is not None and (preds_mun["mes"] == mes_foco).any():
-    mes_pico = preds_mun[preds_mun["mes"] == mes_foco].iloc[0]
+# Filtro pelo mês predito (target_mes); se não houver match, cai no pico do ano.
+if mes_foco is not None and (preds_mun["target_mes"] == mes_foco).any():
+    mes_pico = preds_mun[preds_mun["target_mes"] == mes_foco].iloc[0]
     label_foco = nome_mes(mes_foco)
 else:
     mes_pico = preds_mun.loc[preds_mun["prob_predita"].idxmax()]
@@ -154,7 +159,10 @@ n_surtos_reais = int(preds_mun["y_true"].sum())
 metric_row(
     metric(label_foco,
            value=f"{prob_pico:.0%}",
-           delta=f"{ano_mes_humano(int(mes_pico['ano']), int(mes_pico['mes']))} · {label_pico}",
+           delta=(
+               f"{ano_mes_humano(int(mes_pico['target_ano']), int(mes_pico['target_mes']))}"
+               f" · {label_pico}"
+           ),
            delta_dir="up" if slug_pico in ("alto", "critico") else None),
     metric("Meses com alerta", f"{n_alertas}",
            delta=f"de {len(preds_mun)} meses preditos (≥ 50%)"),
@@ -177,7 +185,7 @@ fig.add_trace(go.Bar(
     name="Probabilidade prevista",
     text=[f"{p:.0%}" for p in preds_mun["prob_predita"]],
     textposition="outside",
-    customdata=[nome_mes(m) for m in preds_mun["mes"]],
+    customdata=[nome_mes(m) for m in preds_mun["target_mes"]],
     hovertemplate="<b>%{customdata}</b><br>Prob: %{y:.1%}<extra></extra>",
 ))
 surto_real = preds_mun[preds_mun["y_true"] == 1]
@@ -188,7 +196,7 @@ if not surto_real.empty:
         mode="markers",
         marker=dict(size=14, color="#0f172a", symbol="star"),
         name="Surto real",
-        customdata=[nome_mes(m) for m in surto_real["mes"]],
+        customdata=[nome_mes(m) for m in surto_real["target_mes"]],
         hovertemplate="<b>%{customdata}</b><br>Surto confirmado<extra></extra>",
     ))
 fig.update_layout(
@@ -245,7 +253,7 @@ titulo_shap = (
 st.markdown(section_label(titulo_shap), unsafe_allow_html=True)
 st.caption(
     f"Análise para {nome_sel} em "
-    f"{ano_mes_humano(int(mes_pico['ano']), int(mes_pico['mes']))}"
+    f"{ano_mes_humano(int(mes_pico['target_ano']), int(mes_pico['target_mes']))}"
     f"{' (mês de maior probabilidade no ano)' if mes_foco is None else ''}. "
     f"Probabilidade prevista: {prob_pico:.1%}. "
     "🔴 vermelho = empurrou para CIMA · 🟢 verde = empurrou para BAIXO."
@@ -281,13 +289,17 @@ else:
         else:
             features = carregar_features()
             cod_alvo = int(mes_pico["cod_ibge"])
-            ano_alvo = int(mes_pico["ano"])
-            mes_alvo = int(mes_pico["mes"])
+            # Filtramos features pelo mês t (entrada do modelo); o badge mostra
+            # o mês predito t+1 (target_ano/target_mes) — são instantes distintos.
+            ano_features = int(mes_pico["ano"])
+            mes_features = int(mes_pico["mes"])
+            ano_predito = int(mes_pico["target_ano"])
+            mes_predito = int(mes_pico["target_mes"])
 
             X_amostra = features[
                 (features["cod_ibge"] == cod_alvo)
-                & (features["ano"] == ano_alvo)
-                & (features["mes"] == mes_alvo)
+                & (features["ano"] == ano_features)
+                & (features["mes"] == mes_features)
             ].copy()
 
             X_amostra["target_year"] = X_amostra["ano"] + (X_amostra["mes"] == 12).astype(int)
@@ -313,11 +325,11 @@ else:
                 top = justificar_alerta(mdl, X_amostra, top=qtd_top)
                 max_abs = float(top["contribuicao"].abs().max())
                 metodo_usado = top["metodo"].iloc[0]
-                # Resumo no topo: chip de risco + mês + método
+                # Resumo no topo: chip de risco + mês predito + método
                 st.markdown(
                     f'<div style="margin:12px 0">{risk_badge(prob_pico, lg=True)}'
                     f' <span style="margin-left:8px;color:var(--c-muted);font-size:13px">'
-                    f"{ano_mes_humano(ano_alvo, mes_alvo)} · {prob_pico:.1%}</span>"
+                    f"{ano_mes_humano(ano_predito, mes_predito)} · {prob_pico:.1%}</span>"
                     f' <span style="margin-left:8px;color:var(--c-muted-2);'
                     f'font-size:11px;font-family:var(--font-mono)">método: {metodo_usado}</span>'
                     f"</div>",
