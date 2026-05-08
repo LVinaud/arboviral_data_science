@@ -38,6 +38,7 @@ paginas = [
     st.Page("screens/municipio.py", title="Município", icon="🔎"),
     st.Page("screens/mapa.py", title="Mapa de SP", icon="🗺️"),
     st.Page("screens/comparativo.py", title="Comparativo", icon="📊"),
+    st.Page("screens/variaveis.py", title="Variáveis", icon="📋"),
     st.Page("screens/sobre.py", title="Sobre o projeto", icon="ℹ️"),
 ]
 
