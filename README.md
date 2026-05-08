@@ -52,6 +52,10 @@ O pipeline de ingestão está **100% implementado** para todos os 645 município
 | `socioeconomico.parquet` | IDH-M (PNUD) + CAPAG (STN) | estático + 2018–2025 | Download manual |
 | `sinisa.parquet` | SINISA | 2023–2024, anual | Download manual |
 | `habitacao.parquet` | IBGE Censos 2010 e 2022 | estático | Download manual (4 tabelas SIDRA) |
+| `densidade.parquet` | IBGE — área dos municípios + estimativa pop | estático | Script automático (`scraping/ibge_areas.py`) |
+| `mapbiomas.parquet` | MapBiomas Brasil — Coleção 10.1 | 2015–2024, anual | Script automático (`scraping/mapbiomas.py`) |
+| `esf.parquet` | e-Gestor APS — cobertura ESF | 2015–2025, mensal | Script automático (`scraping/esf_coverage.py`, API REST) |
+| `vacinacao_fa.parquet` | DATASUS PNI — cobertura vacinal FA | 2015–2025, anual (gap 2017) | CSV manual (TabNet, formato inteli.gente) |
 
 Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 
@@ -60,7 +64,7 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 `src/arboviral/transform/build_master.py` gera `data/processed/municipio_mes.parquet`:
 
 - **85.140 linhas** · 645 municípios SP × 11 anos (2015–2025) × 12 meses
-- **57 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação
+- **79 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + 9 de latência SINAN (proxy de subnotificação) + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação, área e densidade populacional, 5 categorias de uso do solo (MapBiomas), 5 da cobertura APS/ESF (e-Gestor MS), **1 de cobertura vacinal contra febre amarela (PNI/DATASUS)**
 
 **Decisões metodológicas documentadas:**
 - *População 2024–2025*: forward-fill a partir das estimativas IBGE de 2023 (IBGE só publica até 2023). Alternativa rejeitada: ajustar modelo de tendência populacional. Forward-fill foi escolhida por simplicidade e por ser conservadora — variação populacional municipal anual é tipicamente <2%, dentro da margem de erro da própria estimativa do IBGE.
@@ -93,13 +97,14 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 
 Pipeline completo de features → treino → análise, com foco em **explicabilidade** (a plataforma final precisa justificar o alerta para o gestor):
 
-**Features** ([`src/arboviral/features/build_features.py`](src/arboviral/features/build_features.py)) — gera `data/processed/features.parquet` (117 colunas):
+**Features** ([`src/arboviral/features/build_features.py`](src/arboviral/features/build_features.py)) — gera `data/processed/features.parquet` (**140 colunas após Onda 1**):
 - Lags de casos (t-1, t-2, t-3, t-6, t-12) e de incidência (t-1..t-3) por doença
 - Rolling means (janelas 3 e 6 meses) e tendência linear
 - Lags climáticos (precip, temp, umidade em t-1, t-2, roll3) — literatura aponta efeito 1-2 meses
 - Sazonalidade cíclica: `mes_sin`, `mes_cos`
 - Estáticas e anuais já no master (MUNIC, habitação, IDH, GINI, PIB, CAPAG, SINISA)
-- **Sem leakage**: todas as features no instante t usam apenas dados ≤ t
+- **Onda 1 (incorporada em 2026-05)**: 5 categorias de uso do solo MapBiomas, 2 de densidade IBGE, 1 de cobertura vacinal FA, 5 de cobertura APS/ESF (com one-hot da metodologia AB/APS), 9 de latência SINAN por doença (mediana, p90, n_casos em lag1) — total +23 colunas em relação à versão anterior (117 → 140)
+- **Sem leakage**: todas as features no instante t usam apenas dados ≤ t. Latência e ESF entram como lag1 (mês anterior) por serem informações operacionais que só ficam disponíveis depois das notificações
 
 **Validação** ([`src/arboviral/evaluation/splits.py`](src/arboviral/evaluation/splits.py)) — *expanding window* com 3 dobras:
 - Fold 1: treina ≤ 2021, testa target_year=2022
@@ -126,10 +131,14 @@ Todos os modelos ML usam `class_weight='balanced'` (XGBoost via `scale_pos_weigh
 - Lift sobre baseline aleatório: AUPRC / prevalência
 - Secundárias: F1, recall (sensibilidade), specificity, precision
 
-**Explicabilidade** ([`src/arboviral/evaluation/explain.py`](src/arboviral/evaluation/explain.py)):
-- `shap_tree()`: TreeExplainer para RF/XGB/LGBM
-- `importancias_logreg()` / `importancias_ebm()`: extração nativa
-- `shap_por_predicao()`: top features que justificam UMA predição (use case da plataforma)
+**Explicabilidade** ([`src/arboviral/evaluation/explain.py`](src/arboviral/evaluation/explain.py)) — uniforme entre todos os modelos do portfolio (atualizado 2026-05):
+- `explicacao_local(modelo, X_amostra)`: top features que justificam UMA predição. Despacha automaticamente pelo tipo do estimador final do pipeline:
+  - **RandomForest / XGBoost / LightGBM** → SHAP TreeExplainer (post-hoc, exato em árvores)
+  - **Regressão Logística** → coeficiente × valor padronizado (a soma + intercept reproduz exatamente `decision_function`; sanity check passou)
+  - **EBM (Explainable Boosting Classifier)** → API nativa `clf.explain_local()` do interpret-ml. Termos de interação 'a & b' têm a contribuição distribuída entre os pares para preservar o ranking por feature de entrada
+- Output uniforme: DataFrame com `feature, valor_observado, contribuicao, abs_contribuicao, sign, metodo`. A coluna `metodo` documenta qual técnica foi usada (útil para auditoria e para a UI mostrar ao gestor).
+- Funções legadas mantidas: `shap_tree()`, `importancias_logreg()`, `importancias_ebm()`, `shap_por_predicao()` (alias retrocompat).
+- Use case da plataforma: o app Streamlit (`experimental/platform-app`) chama `explicacao_local()` para qualquer modelo selecionado pelo gestor — não está mais limitado a RF/XGB/LGBM.
 
 **Treino e análise:**
 ```bash
@@ -183,13 +192,40 @@ Random Forest antecipa **1 a cada 3 surtos novos** com 1 mês de antecedência, 
 > - **+** incidência 128/100k (alta)
 > - **+** crescimento 348 → 557 (tendência ascendente)
 
+### Resultados — segunda rodada (Onda 1 de novas fontes)
+
+Em maio/2026, integramos 5 fontes do top 10 do roadmap (MapBiomas, ESF, latência SINAN, densidade, vacinação FA — ver [`ROADMAP.md`](ROADMAP.md) §2). O re-treino completo (~2h, mesmas 315 combinações) permite quantificar o ganho real das novas features:
+
+**Top ganhos absolutos em AUPRC** (média dos 3 folds, comparado ao treino pré-Onda 1):
+
+| Cenário | AUPRC pré | AUPRC pós | Δ | Δ relativo |
+|---|---:|---:|---:|---:|
+| **zika × inc100 (RF)** | 0.014 | **0.101** | +0.088 | **+640%** |
+| zika × canal (XGB) | 0.077 | 0.115 | +0.038 | +49% |
+| zika × zscore (XGB) | 0.057 | 0.094 | +0.037 | +65% |
+| zika × canal (RF) | 0.130 | 0.165 | +0.036 | +27% |
+| dengue × canal (LGBM/XGB) | 0.543 | 0.569 | +0.027 | +5% |
+| chikungunya × canal (XGB) | 0.287 | 0.312 | +0.024 | +8% |
+
+**Achado defensável**: zika é a doença mais beneficiada (média +0.0085 vs +0.0011 dengue, -0.0017 chikungunya). Coerente com a hipótese cross-doença + as novas fontes:
+- Cobertura ESF afeta detecção (vigilância), reduzindo viés de subnotificação
+- MapBiomas (uso urbano) + densidade IBGE = pressão vetorial *Aedes*
+- Cross-doença (já existia) com agora **mais features de dengue disponíveis** → zika "herda" mais sinal
+
+A narrativa para o relatório/artigo é forte: **ao adicionar fontes ambientais (MapBiomas), de cobertura sanitária (ESF, vacinação FA) e de qualidade da vigilância (latência SINAN), o modelo passa a capturar surtos de zika que antes eram invisíveis** (AUPRC 0.014 → 0.101 em zika×inc100).
+
+**Pioras pontuais documentadas** (provavelmente ruído de fold em definições raras):
+- chikungunya × inc100 (LGBM): -0.105 — a definição inc100 tem só 0.38% de prevalência; alta variância entre folds
+- febre amarela: continua NaN em todas as definições (raridade impede aprendizado clássico)
+
 ### Próximas etapas
 
-1. **Sensitivity analysis com `--no-cross`**: quantificar o ganho de incluir features cross-doença
+1. **Sensitivity analysis com `--no-cross`**: quantificar o ganho de incluir features cross-doença (mascaramento ainda placeholder em `train.py`)
 2. **Hyperparameter tuning** com Optuna (atual usa defaults)
 3. **Calibração de probabilidades** (importante para uso em produção)
-4. **Plataforma**: interface integrada à inteli.gente, exibindo top features SHAP para cada alerta
-5. Trabalho futuro: MEM (L5) via ponte R, framing alternativo para FA (anomaly detection)
+4. **Plataforma**: interface integrada à inteli.gente, exibindo top features para cada alerta. App Streamlit funcional na branch `experimental/platform-app` — design system completo, 6 telas (Visão geral, Alertas, Município, Mapa, Comparativo, Sobre), explicabilidade local para todos os modelos do portfolio (não apenas árvores).
+5. **5 fontes restantes do top 10**: LIRAa (prioridade #1 — único do top 3 ainda pendente), mobilidade pendular, SIH-SUS, eventos massivos, NDVI.
+6. Trabalho futuro: MEM (L5) via ponte R, framing alternativo para FA (anomaly detection).
 
 ## Variáveis e fontes de dados
 
@@ -303,6 +339,80 @@ Dados estáticos censitários. Municípios sem aglomerados/favelas têm NaN (0 i
 |---|---|
 | IAP0001 | Parcela de vias públicas pavimentadas na área urbana (%) |
 
+### Onda 1 — Fontes integradas em maio/2026
+
+#### Densidade populacional — Base: IBGE Áreas Territoriais (FTP)
+
+| Variável | Descrição |
+|---|---|
+| `area_km2` | Área territorial do município em km² (IBGE 2024) |
+| `densidade_2023` | Habitantes por km² calculado como `populacao_2023 / area_km2` |
+
+> Fonte: `geoftp.ibge.gov.br/.../areas_territoriais/2024/AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls`. Cobertura 645/645 municípios SP, 100% completude. Densidade varia de 3.6 hab/km² (interior) a 14.593 hab/km² (metropolitano).
+>
+> Coleta: [`scraping/ibge_areas.py`](src/arboviral/scraping/ibge_areas.py) · Parsing: [`ingestion/densidade.py`](src/arboviral/ingestion/densidade.py).
+
+#### Uso e cobertura do solo — Base: MapBiomas Brasil Coleção 10.1
+
+| Variável | Descrição |
+|---|---|
+| `pct_floresta` | % de área com floresta natural |
+| `pct_agricultura` | % com agropecuária (pastagem + lavoura + silvicultura) |
+| `pct_nao_vegetado` | % urbanizado / não vegetado (cidades, infraestrutura, mineração) |
+| `pct_agua` | % de água / ambiente marinho |
+| `pct_natural_nao_florestal` | % de formação natural não florestal (cerrado aberto, campos, etc.) |
+
+> Fonte: MapBiomas Brasil Coleção 10.1, DOI [10.58053/MapBiomas/SJZOLT](https://doi.org/10.58053/MapBiomas/SJZOLT). Cobertura 645/645 municípios SP × anos 2015-2024 (2025 por ffill — variação <1%/ano). Mediana SP: agricultura 74%, floresta 9.4%, urbanizado 1.3%.
+>
+> Coleta: [`scraping/mapbiomas.py`](src/arboviral/scraping/mapbiomas.py) (Google Drive, ~75 MB) · Parsing: [`ingestion/mapbiomas.py`](src/arboviral/ingestion/mapbiomas.py).
+
+#### Cobertura da Atenção Primária à Saúde — Base: e-Gestor APS / Ministério da Saúde
+
+| Variável | Descrição |
+|---|---|
+| `esf_metodologia` | Categórica `'AB'` (2015–2020) ou `'APS'` (2021–presente) |
+| `esf_cobertura_pct` | % cobertura calculada pelo MS |
+| `esf_qt_equipes` | Número de equipes ESF do município |
+| `esf_qt_capacidade` | Capacidade total de atendimento (apenas APS, NaN para AB) |
+| `esf_pop_referencia` | População usada como denominador pelo MS |
+
+> Fonte: API REST descoberta via DevTools no portal e-Gestor APS — `relatorioaps-prd.saude.gov.br/cobertura/{ab|aps}`. **Quebra metodológica em 2021**: parâmetros, formato dos números (string BR `"12,106,920"` em AB vs int em APS) e nome do campo (`pcCoberturaAb` → `qtCobertura`). A flag `esf_metodologia` permite ao modelo distinguir os dois regimes.
+>
+> Cobertura: 99.9% das linhas SP (645 municípios × 132 meses, 2015-01 a 2025-12). Coleta automatizada (132 arquivos JSON, ~380 MB raw): [`scraping/esf_coverage.py`](src/arboviral/scraping/esf_coverage.py) · Parsing: [`ingestion/esf.py`](src/arboviral/ingestion/esf.py).
+
+#### Cobertura vacinal contra febre amarela — Base: PNI / DATASUS
+
+| Variável | Descrição |
+|---|---|
+| `cob_vac_fa_pct` | % da população-alvo imunizada contra febre amarela (anual) |
+
+> Fonte: Programa Nacional de Imunizações (PNI/MS) via TabNet — `tabnet.datasus.gov.br/cgi/tabcgi.exe?pni/cnv/cpniuf.def`. Coleta manual reformatada para o padrão da plataforma inteli.gente (`codigo_ibge, sigla, ano, variavel_valor`). Consulta SQL alternativa via BasedosDados (`br_ms_pni`).
+>
+> Cobertura SP: 645/645 municípios × 1994-2026 com gaps (2008, 2010, 2011, 2014, 2017). Dentro da janela do master (2015-2025) falta apenas 2017, preenchido por forward-fill no `build_master.py` (cobertura vacinal varia <5p.p./ano em períodos sem campanha; e 2017 não teve mudança brusca da política nacional para SP).
+>
+> **Achado preliminar relevante**: mediana SP cai de ~94% (2002) para ~74% (2025) — declínio progressivo com implicações para risco populacional, especialmente combinado com `pct_floresta` (MapBiomas) para identificar municípios com matas + população não imunizada.
+>
+> Valores >100% ocorrem (~25% das linhas) e são preservados sem cap: ocorrem quando o denominador-alvo do PNI fica abaixo do real (migração, estimativa populacional defasada).
+>
+> Coleta documentada (CGI sem REST estável): [`scraping/pni_febre_amarela.py`](src/arboviral/scraping/pni_febre_amarela.py) · Parsing: [`ingestion/vacinacao_fa.py`](src/arboviral/ingestion/vacinacao_fa.py).
+
+#### Latência de notificação SINAN — Bases: SINAN/DATASUS (extensão da ingestão existente)
+
+| Variável | Descrição |
+|---|---|
+| `{doenca}_latencia_mediana` | Mediana de `DT_NOTIFIC - DT_SIN_PRI` em dias (proxy de qualidade da vigilância) |
+| `{doenca}_latencia_p90` | Percentil 90 da latência (cauda longa, indica casos atrasados) |
+| `{doenca}_n_casos_com_latencia` | Contagem de casos com ambas as datas válidas |
+
+> Cada caso individual no SINAN tem dois carimbos de tempo: `DT_NOTIFIC` (quando o caso foi notificado ao sistema) e `DT_SIN_PRI` (data dos primeiros sintomas). A diferença mede o quão rápido o município detecta e reporta. Ingestão estendida em [`ingestion/sinan.py`](src/arboviral/ingestion/sinan.py) calcula a latência por caso, filtra valores absurdos (0 ≤ delta ≤ 365 dias) e agrega por (município, mês).
+>
+> **Cobertura**: ~99.9% dos casos têm ambas as datas válidas. Mediana SP por doença:
+> - Dengue: 3 dias (sistema funcionando bem para a doença mais comum)
+> - Zika: 4 dias
+> - Chikungunya: 7 dias (doença menos lembrada → notificação mais lenta)
+>
+> **Justificativa epidemiológica**: latência alta em um município = casos chegando atrasados ao sistema. Uma "calmaria aparente" pode mascarar surto real em curso. Combinada com cobertura ESF, dá ao modelo dois proxies independentes de qualidade do sistema de vigilância municipal.
+
 ## Estrutura do repositório
 
 ```
@@ -321,7 +431,13 @@ arboviral_data_science/
 │   └── lookup/                  # tabelas pequenas versionadas (município↔estação INMET)
 ├── src/arboviral/
 │   ├── io.py                    # caminhos canônicos
-│   ├── ingestion/               # 1 módulo por fonte
+│   ├── scraping/                # NOVO — coleta de dados externos para data/raw/
+│   │   ├── README.md            # tabela de fontes, status, datas de coleta
+│   │   ├── ibge_areas.py        # IBGE — áreas territoriais por município
+│   │   ├── mapbiomas.py         # MapBiomas — uso e cobertura do solo (Coleção 10.1)
+│   │   ├── esf_coverage.py      # e-Gestor MS — cobertura ESF/APS (REST mensal)
+│   │   └── pni_febre_amarela.py # DATASUS PNI — cobertura vacinal FA (manual via TabNet)
+│   ├── ingestion/               # 1 módulo por fonte (raw → interim)
 │   │   ├── sinan.py + sinan_ftp.py + sinan_api.py     # dengue, zika, chikungunya
 │   │   ├── febre_amarela.py     # FA (dados abertos MS — não está no FTP SINAN)
 │   │   ├── nasa_power.py        # clima
@@ -330,7 +446,11 @@ arboviral_data_science/
 │   │   ├── ibge.py              # PIB, população, GINI
 │   │   ├── socioeconomico.py    # IDH-M + CAPAG
 │   │   ├── snis.py              # água e esgoto (SINISA)
-│   │   └── habitacao.py         # aglomerados subnormais e favelas (Censos 2010, 2022)
+│   │   ├── habitacao.py         # aglomerados subnormais e favelas (Censos 2010, 2022)
+│   │   ├── densidade.py         # área (IBGE) + densidade populacional
+│   │   ├── mapbiomas.py         # uso/cobertura do solo (5 classes %, anual)
+│   │   ├── esf.py               # cobertura ESF/APS (mensal, AB+APS harmonizados)
+│   │   └── vacinacao_fa.py      # cobertura vacinal contra febre amarela (PNI, anual)
 │   ├── transform/build_master.py    # consolida 10 interim → municipio_mes.parquet
 │   ├── labels/                  # rótulos de surto (4 definições, RQ4)
 │   │   ├── outbreak.py          # funções por definição (canal, zscore, inc100, inc300)

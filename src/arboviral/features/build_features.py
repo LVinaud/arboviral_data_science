@@ -29,7 +29,19 @@ Sazonalidade (cíclica para evitar fronteira dez/jan):
   mes_sin = sin(2π·mes/12) ; mes_cos = cos(2π·mes/12)
 
 Estáticas e anuais: passadas direto do master sem transformação adicional
-(MUNIC, habitação, IDH, GINI, PIB, CAPAG, SINISA, lat, lon, dist_estação_inmet).
+(MUNIC, habitação, IDH, GINI, PIB, CAPAG, SINISA, lat, lon, dist_estação_inmet,
+área/densidade IBGE, MapBiomas uso do solo, cobertura vacinal FA).
+
+ESF (cobertura APS, mensal):
+  esf_cobertura_pct_lag1, esf_qt_equipes_lag1 (lag1 — cobertura é o que o
+  gestor observa no mês anterior); esf_metodologia one-hot (AB vs APS,
+  flag categórica para o modelo distinguir os dois regimes).
+
+Latência SINAN (proxy de qualidade da vigilância, mensal por doença):
+  {doenca}_latencia_mediana_lag1, latencia_p90_lag1, n_casos_com_latencia_lag1
+  Usado em lag1 porque a latência do mês corrente carrega informação que
+  só está disponível DEPOIS dos casos serem notificados — usar t direto é
+  leakage operacional (em produção o gestor não tem essa info ainda).
 
 Saída: data/processed/features.parquet
 Chave: (cod_ibge, ano, mes)
@@ -112,6 +124,12 @@ def build(incluir_cross_doenca: bool = True) -> pd.DataFrame:
         for k in LAGS_SURTO_PASSADO:
             feats[f"{d}_surto_canal_lag{k}"] = grupo[f"{d}_surto_canal"].apply(lambda s, k=k: _lag(s, k)).reset_index(level=0, drop=True)
 
+        # Latência SINAN (proxy de qualidade da vigilância) — em lag1 (info só
+        # observável depois das notificações; usar t é leakage operacional)
+        for col in (f"{d}_latencia_mediana", f"{d}_latencia_p90", f"{d}_n_casos_com_latencia"):
+            if col in df.columns:
+                feats[f"{col}_lag1"] = grupo[col].apply(lambda s: _lag(s, 1)).reset_index(level=0, drop=True)
+
     # --- Features climáticas com lag (precip, temp, umid em t-1, t-2 e roll3) ---
     print("Gerando features climáticas...", flush=True)
     for v in CLIMA_VARS:
@@ -138,6 +156,15 @@ def build(incluir_cross_doenca: bool = True) -> pd.DataFrame:
         "mgrd11_enxurrada", "mgrd14_deslizamento", "mgrd201_mapeamento_risco", "mmam2612_moradia_risco",
         "num_aglom_subnorm_2010", "pop_aglom_subnorm_2010",
         "num_favelas_2022", "pop_favelas_2022",
+        # Densidade IBGE (estáticas)
+        "area_km2", "densidade_2023",
+        # MapBiomas — uso do solo (anuais, varia <1%/ano)
+        "pct_floresta", "pct_agricultura", "pct_nao_vegetado", "pct_agua", "pct_natural_nao_florestal",
+        # Vacinação FA (anual)
+        "cob_vac_fa_pct",
+        # ESF — qt_capacidade e pop_referencia passados direto (denominadores estruturais);
+        # cobertura_pct e qt_equipes vão como lag1 abaixo
+        "esf_qt_capacidade", "esf_pop_referencia",
     ]
     for c in estaticas_anuais:
         if c in df.columns:
@@ -148,6 +175,17 @@ def build(incluir_cross_doenca: bool = True) -> pd.DataFrame:
         capag_dummies = pd.get_dummies(df["capag"], prefix="capag", dummy_na=False)
         for c in capag_dummies.columns:
             feats[c] = capag_dummies[c].values.astype(int)
+
+    # ESF metodologia: categórica (AB vs APS) → one-hot (quebra metodológica em 2021)
+    if "esf_metodologia" in df.columns:
+        esf_dummies = pd.get_dummies(df["esf_metodologia"], prefix="esf_metodologia", dummy_na=False)
+        for c in esf_dummies.columns:
+            feats[c] = esf_dummies[c].values.astype(int)
+
+    # ESF cobertura mensal: lag1 (em produção, gestor observa o mês passado)
+    for c in ("esf_cobertura_pct", "esf_qt_equipes"):
+        if c in df.columns:
+            feats[f"{c}_lag1"] = grupo[c].apply(lambda s: _lag(s, 1)).reset_index(level=0, drop=True)
 
     # --- Remover features cross-doença se solicitado ---
     if not incluir_cross_doenca:

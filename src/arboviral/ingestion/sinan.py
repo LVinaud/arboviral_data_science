@@ -23,6 +23,15 @@ Sobre os campos SINAN:
                  zika → '2' = confirmado, '5' = descartado
     EVOLUCAO   : '2'/'3'/'4' = óbito (por doença, outra causa, em investigação)
     HOSPITALIZ : '1' = sim (presente apenas em dengue e chikungunya)
+    DT_NOTIFIC : data de notificação ao SINAN
+    DT_SIN_PRI : data dos primeiros sintomas
+
+Latência (proxy de qualidade da vigilância):
+    delta_dias = DT_NOTIFIC - DT_SIN_PRI por caso individual.
+    Filtramos valores absurdos (negativo ou > 365 dias).
+    Agregamos por (município, mês de notificação) em mediana e p90.
+    Latência alta indica subnotificação / atraso na detecção, e o modelo
+    pode usar isso como sinal de risco mesmo quando casos contagem está baixa.
 """
 import re
 from pathlib import Path
@@ -48,6 +57,19 @@ def _lookup_6d_para_7d() -> dict[str, int]:
     return _LOOKUP_6_PARA_7
 
 
+def _parse_data(valor) -> "datetime.date | None":
+    """Aceita datetime.date ou string YYYYMMDD; devolve date ou None."""
+    import datetime
+    if isinstance(valor, datetime.date):
+        return valor
+    if isinstance(valor, str) and len(valor) >= 8:
+        try:
+            return datetime.date(int(valor[:4]), int(valor[4:6]), int(valor[6:8]))
+        except ValueError:
+            return None
+    return None
+
+
 def _agregar_dbc_streaming(
     caminho_dbc: Path,
     doenca: str,
@@ -58,9 +80,11 @@ def _agregar_dbc_streaming(
 
     Itera o DBF registro a registro, filtrando para a UF indicada, e acumula
     apenas contagens (dicts), evitando OOM em arquivos grandes (ex.: DENGBR24, 287 MB).
+
+    Também agrega LATÊNCIAS (DT_NOTIFIC - DT_SIN_PRI) em listas por chave para
+    cálculo de mediana/p90 ao final — proxy de qualidade da vigilância.
     """
     from collections import defaultdict
-    import datetime
 
     caminho_dbf = caminho_dbc.with_suffix(".dbf")
     try:
@@ -72,6 +96,8 @@ def _agregar_dbc_streaming(
         provaveis: defaultdict = defaultdict(int)
         obitos: defaultdict = defaultdict(int)
         internacoes: defaultdict = defaultdict(int)
+        # latências em dias por (cod_ibge, ano_notif, mes_notif)
+        latencias: defaultdict = defaultdict(list)
         tem_hospitaliz = False
 
         for rec in table:
@@ -83,19 +109,21 @@ def _agregar_dbc_streaming(
             if cod7 is None:
                 continue
 
-            dt = rec.get("DT_NOTIFIC")
-            if isinstance(dt, datetime.date):
-                ano, mes = dt.year, dt.month
-            elif isinstance(dt, str) and len(dt) >= 6:
-                try:
-                    ano, mes = int(dt[:4]), int(dt[4:6])
-                except ValueError:
-                    continue
-            else:
+            dt_notif = _parse_data(rec.get("DT_NOTIFIC"))
+            if dt_notif is None:
                 continue
-
+            ano, mes = dt_notif.year, dt_notif.month
             chave = (cod7, ano, mes)
+
             notificados[chave] += 1
+
+            # Latência = DT_NOTIFIC - DT_SIN_PRI (em dias)
+            # Filtrar valores absurdos: < 0 (data inconsistente) e > 365 (provavelmente erro)
+            dt_sin = _parse_data(rec.get("DT_SIN_PRI"))
+            if dt_sin is not None:
+                delta = (dt_notif - dt_sin).days
+                if 0 <= delta <= 365:
+                    latencias[chave].append(delta)
 
             cf = str(rec.get("CLASSI_FIN", "")).strip()
             if _casos_confirmados_mask_rec(cf, doenca):
@@ -115,6 +143,22 @@ def _agregar_dbc_streaming(
             return pd.DataFrame()
 
         chaves = sorted(notificados)
+        # Estatísticas de latência: mediana + p90; NaN quando sem latências válidas
+        import numpy as np
+        med_lat = []
+        p90_lat = []
+        n_validas = []
+        for k in chaves:
+            lats = latencias.get(k, [])
+            if lats:
+                med_lat.append(float(np.median(lats)))
+                p90_lat.append(float(np.percentile(lats, 90)))
+                n_validas.append(len(lats))
+            else:
+                med_lat.append(float("nan"))
+                p90_lat.append(float("nan"))
+                n_validas.append(0)
+
         rows = {
             "cod_ibge": [k[0] for k in chaves],
             "ano": [k[1] for k in chaves],
@@ -123,6 +167,9 @@ def _agregar_dbc_streaming(
             "casos_provaveis": [provaveis[k] for k in chaves],
             "obitos": [obitos[k] for k in chaves],
             "internacoes": [internacoes.get(k, float("nan")) if tem_hospitaliz else float("nan") for k in chaves],
+            "latencia_mediana_dias": med_lat,
+            "latencia_p90_dias": p90_lat,
+            "n_casos_com_latencia": n_validas,
         }
         return pd.DataFrame(rows)
     finally:
@@ -166,10 +213,22 @@ def build(doenca: str = "dengue") -> pd.DataFrame:
     if not partes:
         raise RuntimeError(f"Nenhum dado SP encontrado para {doenca}")
 
+    # Agregação: cada chave (cod_ibge, ano, mes) aparece em apenas 1 arquivo DBC
+    # (arquivos do FTP DATASUS são separados por ano de notificação), então
+    # 'first' e 'sum' são equivalentes para chaves únicas — mas usar 'first'
+    # nas estatísticas de latência é mais correto conceitualmente.
     return (
         pd.concat(partes, ignore_index=True)
         .groupby(["cod_ibge", "ano", "mes"], as_index=False)
-        .sum(numeric_only=True)
+        .agg({
+            "casos_notificados":     "sum",
+            "casos_provaveis":       "sum",
+            "obitos":                "sum",
+            "internacoes":           "sum",
+            "latencia_mediana_dias": "first",
+            "latencia_p90_dias":     "first",
+            "n_casos_com_latencia":  "sum",
+        })
         .sort_values(["cod_ibge", "ano", "mes"])
         .reset_index(drop=True)
     )

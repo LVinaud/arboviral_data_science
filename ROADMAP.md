@@ -12,11 +12,12 @@ Este documento organiza o que vem após a finalização do pipeline atual. Divid
 
 | # | Item | Esforço | Status |
 |---|---|---|---|
-| 1.1 | Refatorar pipeline para salvar predições (`predictions.parquet`) e modelos treinados (`.joblib`) | 1 dia | ⏳ próximo |
+| 1.1 | Refatorar pipeline para salvar predições (`predictions.parquet`) e modelos treinados (`.joblib`) | 1 dia | ✅ feito (commit `fb0a289`) |
 | 1.2 | SHAP estratificado por perfil de município (clusters por IDH × população) | 1-2 dias | 📋 |
 | 1.3 | Análise de robustez (RQ3): simular dados faltantes 10/30/50% e medir queda de performance | 2-3 dias | 📋 |
-| 1.4 | Sensitivity analysis com `--no-cross`: quantificar ganho das features cross-doença | 1 dia | 📋 |
+| 1.4 | Sensitivity analysis com `--no-cross`: quantificar ganho das features cross-doença | 1 dia | 📋 (flag presente, mascaramento ainda não implementado em `train.py`) |
 | 1.5 | Hyperparameter tuning com Optuna nos top 3 modelos | 2-3 dias | 📋 |
+| 1.6 | Explicabilidade local para EBM e LogReg (não só árvores) | 0.5 dia | ✅ feito — `explicacao_local()` despacha por tipo de modelo (SHAP / coef×valor padronizado / `explain_local` nativo do EBM) |
 
 **Resultado esperado**: IC final com 4 RQs respondidas + análise de antecipação (achado central) + relatório consolidado para defesa.
 
@@ -25,6 +26,22 @@ Este documento organiza o que vem após a finalização do pipeline atual. Divid
 ## 2. Médio prazo — Top 10 fontes de dados a adicionar
 
 Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o poder preditivo e reduz NaN no dataset.
+
+### Status da Onda 1 (atualizado 2026-05-07)
+
+**5 de 10 fontes integradas** — todas via scraping/download automático e parser dedicado, com docstring documentando URL e formato:
+
+| # | Fonte | Variáveis adicionadas | Cobertura SP |
+|---|---|---|---:|
+| 2 | MapBiomas Coleção 10.1 | 5 colunas (`pct_floresta`, `pct_agricultura`, `pct_nao_vegetado`, `pct_agua`, `pct_natural_nao_florestal`) | 100% |
+| 3 | Cobertura ESF/APS (e-Gestor MS) | 5 colunas (`esf_metodologia`, `esf_cobertura_pct`, `esf_qt_equipes`, `esf_qt_capacidade`, `esf_pop_referencia`) | 99.9% |
+| 4 | Vacinação FA (PNI/DATASUS) | 1 coluna (`cob_vac_fa_pct`) | 97.5% |
+| 5 | Latência SINAN | 9 colunas (mediana, p90, n_casos × 3 doenças com volume) | ~99.9% |
+| 9 | Densidade IBGE | 2 colunas (`area_km2`, `densidade_2023`) | 100% |
+
+**Total**: dataset de 57 → **79 colunas** (+22 do master) e features de 117 → **140** (+23). Re-treino completo (315 combinações = 4 doenças × 4 definições × 7 modelos × ~3 folds) confirmou ganho relevante em zika (RF inc100: AUPRC 0.014 → 0.101 = **+640%**) e ganho moderado em dengue/chikungunya (~+0.02 a +0.03 nos top modelos). Detalhes em `RELATORIO_MODELAGEM.md` §3-4.
+
+**Ainda pendentes** (5 itens, em ordem de prioridade revisada): 1 (LIRAa), 6 (mobilidade pendular), 7 (SIH-SUS), 8 (eventos massivos), 10 (NDVI).
 
 ### 🥇 Top 3 — Maior impacto esperado
 
@@ -38,37 +55,42 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 - **Formato típico**: PDF/Excel por município (chato de extrair, mas estruturado)
 - **Esforço estimado**: 1 semana (web scraping + parser)
 
-#### 2. **MapBiomas — uso e cobertura do solo**
-- **O que adiciona**: % de cobertura por classe (mata, agropastoril, urbano, água) por município, anual.
-- **Por que importa**: áreas de mata = transmissão silvestre (FA, Mayaro). Urbanização rápida = vetor urbano. Agricultura = uso de pesticidas e modificação de habitat.
-- **Onde obter**:
-  - https://mapbiomas.org/ (gratuito, abertos)
-  - Estatísticas municipais já agregadas em CSV
-- **Formato**: CSV download direto
-- **Esforço**: 2 dias (download + integração)
+#### 2. **MapBiomas — uso e cobertura do solo** ✅ CONCLUÍDO
+- **O que adiciona**: % de cobertura por classe (floresta, agricultura, não vegetado, água, natural não florestal) por município, anual 2015-2024.
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/mapbiomas.py` (download Google Drive, ~75 MB)
+  - Parsing: `src/arboviral/ingestion/mapbiomas.py`
+- **Fonte**: MapBiomas Brasil Coleção 10.1 (DOI: 10.58053/MapBiomas/SJZOLT)
+- **Cobertura**: 645/645 municípios SP × 10 anos, 100% completude
+- **Estatísticas SP**: agricultura 74% mediano, floresta 9.4% mediano, urbanizado 1.3% mediano (download + integração)
 
-#### 3. **Cobertura ESF (Estratégia Saúde da Família)**
-- **O que adiciona**: % de cobertura ESF por município (mensal/anual).
-- **Por que importa**: determina capacidade de detecção precoce e resposta a surtos. Município com cobertura alta detecta cedo, captura mais casos no SINAN — mas também responde mais rápido.
-- **Onde obter**: DATASUS/e-Gestor AB
-  - https://egestorab.saude.gov.br/paginas/acessoPublico/relatorios/relHistoricoCoberturaAB.xhtml
-- **Formato**: Excel/CSV mensal
-- **Esforço**: 2-3 dias
+#### 3. **Cobertura ESF (Estratégia Saúde da Família)** ✅ CONCLUÍDO
+- **O que adiciona**: 5 colunas (cobertura %, qtde equipes ESF, capacidade, pop referência, metodologia).
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/esf_coverage.py` (API REST descoberta via DevTools)
+  - Parsing: `src/arboviral/ingestion/esf.py` (harmoniza AB vs APS)
+- **Endpoints**: `relatorioaps-prd.saude.gov.br/cobertura/{ab,aps}` — GET retornando JSON
+- **Quebra metodológica em 2021** documentada via flag `esf_metodologia` ('AB'/'APS')
+- **Cobertura**: 99.9% das linhas SP (645 municípios × 132 meses)
 
 ### 🥈 Top 4-7 — Impacto moderado
 
-#### 4. **Vacinação — cobertura vacinal de febre amarela**
-- **O que adiciona**: % população vacinada contra FA por município, anual.
-- **Por que importa**: diferencia risco real (transmissão) de risco populacional (vulnerabilidade). Sem isso, modelo confunde "área de risco baixo" com "área bem protegida".
-- **Onde obter**: DATASUS PNI (Programa Nacional de Imunizações)
-  - http://pni.datasus.gov.br/
-- **Esforço**: 2 dias
+#### 4. **Vacinação — cobertura vacinal de febre amarela** ✅ CONCLUÍDO
+- **O que adiciona**: 1 coluna `cob_vac_fa_pct` (% da população-alvo imunizada por município/ano).
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/pni_febre_amarela.py` (CSV TabNet em formato inteli.gente)
+  - Parsing: `src/arboviral/ingestion/vacinacao_fa.py` (filtra SP)
+- **Fonte**: DATASUS PNI — `tabnet.datasus.gov.br/cgi/tabcgi.exe?pni/cnv/cpniuf.def`
+- **Cobertura**: 645/645 municípios SP, 1994-2026 (gap 2017 preenchido por ffill no master)
+- **Achado preliminar**: mediana SP cai de ~94% (2002) para ~74% (2025) — declínio relevante para risco populacional
 
-#### 5. **Tempo de notificação (latência SINAN)**
-- **O que adiciona**: feature derivada — média do delta `DT_NOTIFIC - DT_SIN_PRI` por município/mês.
-- **Por que importa**: proxy direto de subnotificação. Município com latência alta tem casos sub-reportados, então casos baixos podem mascarar surtos reais.
-- **Onde obter**: já temos! Calculável a partir dos arquivos DBC do SINAN que já baixamos.
-- **Esforço**: 1 dia (modificar `sinan.py` para preservar essa info na agregação)
+#### 5. **Tempo de notificação (latência SINAN)** ✅ CONCLUÍDO
+- **O que adiciona**: 3 colunas por doença (mediana, p90, n_casos_com_latencia) — proxy de qualidade da vigilância.
+- **Implementado em**: `src/arboviral/ingestion/sinan.py` (estendido para extrair DT_NOTIFIC - DT_SIN_PRI por caso, filtrar valores absurdos, agregar por município/mês).
+- **Cobertura**: ~99.9% dos casos têm ambas as datas; mediana SP:
+  - Dengue: 3 dias (sistema funcionando bem)
+  - Zika: 4 dias
+  - Chikungunya: 7 dias (doença menos lembrada, notificação mais lenta)
 
 #### 6. **Mobilidade pendular intermunicipal**
 - **O que adiciona**: matriz origem-destino de deslocamentos (estudo, trabalho).
@@ -92,11 +114,14 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 - **Onde obter**: SECTUR municipais (manual), agendas culturais (Embratur).
 - **Esforço**: 1 semana (curadoria manual; pouco escalável)
 
-#### 9. **Densidade populacional e uso urbano**
-- **O que adiciona**: `pop / area_km2`, % urbanização.
-- **Por que importa**: hoje só temos `populacao_estimada`. Densidade é mais explicativa para vetor urbano (densidade alta favorece *Aedes aegypti*).
-- **Onde obter**: IBGE — área já está em outras tabelas SIDRA.
-- **Esforço**: 1 dia
+#### 9. **Densidade populacional e uso urbano** ✅ CONCLUÍDO
+- **O que adiciona**: `area_km2`, `densidade_2023` (hab/km²).
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/ibge_areas.py`
+  - Parsing: `src/arboviral/ingestion/densidade.py`
+- **Fonte**: FTP IBGE — `geoftp.ibge.gov.br/.../areas_territoriais/2024/AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls`
+- **Cobertura**: 645/645 municípios SP, 100% completude
+- **Estatísticas**: densidades de 3.6 hab/km² (interior) a 14.593 hab/km² (metropolitano)
 
 #### 10. **Cobertura vegetal local — NDVI (índice de vegetação)**
 - **O que adiciona**: NDVI mensal por município (média de pixels do MODIS/Landsat).
@@ -106,10 +131,10 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 
 ### Notas práticas sobre as fontes
 
-- **LIRAa é o "santo graal"** — qualquer artigo sério em arboviroses cita LIRAa como variável-chave. Vale priorizar.
-- **MapBiomas + ESF + vacinação** preenchem lacunas estruturais que nosso modelo ainda não vê.
-- **Mobilidade pendular** e **eventos massivos** são difíceis mas podem virar diferencial se conseguirmos extrair.
-- **Latência SINAN** é "fruta baixa" — já temos os dados, só não calculamos.
+- **LIRAa permanece como o "santo graal"** — agora único item do top 3 ainda pendente. Qualquer artigo sério em arboviroses cita LIRAa como variável-chave. Próximo a atacar.
+- ✅ **MapBiomas + ESF + vacinação FA** — concluídos. Confirmaram preencher lacunas estruturais: zika passou de "sem sinal" (AUPRC 0.014) para "modelo aprende" (0.101) com a entrada dessas fontes.
+- **Mobilidade pendular** e **eventos massivos** continuam difíceis mas podem virar diferencial se conseguirmos extrair.
+- ✅ **Latência SINAN** — concluído (era "fruta baixa"; mediana SP variou 3-7 dias por doença, com chikungunya como mais lento — coerente com o esperado).
 
 ---
 
@@ -120,13 +145,15 @@ Análise sincera do que falta para cada nível de publicação. Ordenados por di
 ### 3.1 Workshop nacional (BraSNAM, ENIAC) — viável em ~1 mês
 
 **Já temos:**
-- ✅ Pipeline de dados completo e reproducível
+- ✅ Pipeline de dados completo e reproducível, com 5/10 fontes do top 10 integradas (Onda 1)
 - ✅ Comparação de 4 definições de surto (RQ4)
 - ✅ Análise de antecipação (recall em INICIO de surto) — achado central
-- ✅ SHAP cross-doença (zika previsto por features de dengue)
+- ✅ SHAP cross-doença (zika previsto por features de dengue) — agora **quantitativamente reforçado pela Onda 1**: zika RF×inc100 passou de AUPRC 0.014 → 0.101 (+640%), confirmando que features ambientais (MapBiomas) + cobertura sanitária (ESF) + vacinação ampliam o sinal cross-doença
+- ✅ Explicabilidade local UNIFORME entre todos os modelos do portfolio: árvores via SHAP, EBM via `explain_local` nativo (interpret-ml), LogReg via `coef × valor padronizado`. Output uniforme em `explicacao_local()` permite que a interface (app Streamlit) trate qualquer modelo igual.
 
 **Falta:**
 - 📋 Hyperparameter tuning (Optuna) para fortalecer resultados
+- 📋 Sensitivity `--no-cross` finalizar (mascaramento no `train.py` ainda placeholder)
 - 📋 Texto do artigo (~8-12 páginas)
 
 **Veículos típicos**:
@@ -142,7 +169,7 @@ Análise sincera do que falta para cada nível de publicação. Ordenados por di
 - 📋 Análise de robustez a dados faltantes (RQ3)
 - 📋 Comparação com baseline da literatura: ARIMA, Prophet, simple LSTM
 - 📋 Calibração de probabilidades (importante para uso prático)
-- 📋 Pelo menos 1-2 fontes novas do top 10 acima (LIRAa de preferência)
+- 📋 LIRAa — única fonte do top 3 ainda pendente (5 das outras já entraram na Onda 1)
 
 **Esforço estimado**: 3-4 meses de trabalho focado pós-IC.
 
@@ -222,17 +249,26 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 
 ## Tabela-resumo: roadmap completo
 
-| Prazo | Item | Impacto |
-|---|---|---|
-| **Curto** | 1.1 Salvar predições e modelos | Análises post-hoc 100× mais rápidas |
-| **Curto** | 1.2 SHAP estratificado | Achado novo + interpretação rica |
-| **Curto** | 1.3 Robustez a NaN (RQ3) | Responde RQ pendente, publicável |
-| **Curto** | 1.4 Sensitivity --no-cross | Quantifica ganho cross-doença |
-| **Curto** | 1.5 Hyperparameter tuning | +5% AUPRC esperado |
-| **Médio** | 2.1 LIRAa | +20% AUPRC esperado, diferencial |
-| **Médio** | 2.2 MapBiomas | Drivers ambientais, interpretação |
-| **Médio** | 2.3 Cobertura ESF | Controla viés de detecção |
-| **Médio** | 2.5 Latência SINAN | "Fruta baixa", proxy de subnotificação |
-| **Longo** | 3.4 Validação externa MG | Crítico para artigo sério |
-| **Longo** | 3.4 Validação externa 2º estado | Generalização real |
-| **Longo** | Multitask multidoença | Diferencial metodológico para journal |
+| Prazo | Item | Status | Impacto |
+|---|---|---|---|
+| **Curto** | 1.1 Salvar predições e modelos | ✅ feito | Análises post-hoc 100× mais rápidas |
+| **Curto** | 1.6 Explicabilidade EBM/LogReg uniforme | ✅ feito | Interface trata qualquer modelo igual |
+| **Curto** | 1.2 SHAP estratificado | 📋 | Achado novo + interpretação rica |
+| **Curto** | 1.3 Robustez a NaN (RQ3) | 📋 | Responde RQ pendente, publicável |
+| **Curto** | 1.4 Sensitivity --no-cross | 📋 | Quantifica ganho cross-doença |
+| **Curto** | 1.5 Hyperparameter tuning | 📋 | +5% AUPRC esperado |
+| **Médio** | 2.1 LIRAa | 📋 | +20% AUPRC esperado, diferencial |
+| **Médio** | 2.2 MapBiomas — uso do solo | ✅ feito | Distingue urbano/floresta/agric (drivers vetoriais distintos) |
+| **Médio** | 2.3 Cobertura ESF/APS | ✅ feito | API REST direta (sem Selenium); 132 meses harmonizados |
+| **Médio** | 2.4 Vacinação FA (PNI) | ✅ feito | Cobertura vacinal anual 1994-2026 — declínio observado de 94% (2002) → 74% (2025) |
+| **Médio** | 2.5 Latência SINAN | ✅ feito | Proxy direto de subnotificação (mediana 3-7d por doença) |
+| **Médio** | 2.6 Mobilidade pendular | 📋 | Espalhamento via deslocamento (IBGE Censo 2010/2022) |
+| **Médio** | 2.7 SIH-SUS internações | 📋 | Complementa SINAN; CID-10 A90/A91/A92 |
+| **Médio** | 2.8 Eventos massivos | 📋 | Picos de mobilidade (Carnaval, festas) — curadoria manual |
+| **Médio** | 2.9 Densidade populacional | ✅ feito | Driver direto de transmissão urbana |
+| **Médio** | 2.10 NDVI mensal | 📋 | Sazonalidade vegetal (NASA APPEEARS / Earth Engine) |
+| **Longo** | 3.4 Validação externa MG | 📋 | Crítico para artigo sério |
+| **Longo** | 3.4 Validação externa 2º estado | 📋 | Generalização real |
+| **Longo** | Multitask multidoença | 📋 | Diferencial metodológico para journal |
+
+**Marcador de progresso geral**: 5/10 fontes do top 10 integradas + 1.1 (predições/modelos) e 1.6 (explicabilidade uniforme) feitos. Restam 5 fontes + 4 itens curtos para fechar a IC.

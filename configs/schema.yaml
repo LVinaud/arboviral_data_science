@@ -36,6 +36,71 @@ porte:
   variaveis:
     populacao_estimada: {tipo: int}
 
+geografia_municipal:
+  fonte: ibge_geoftp
+  periodicidade: estatica
+  observacao: |
+    Área territorial obtida do FTP do IBGE (geoftp.ibge.gov.br),
+    aba AR_BR_MUN do arquivo AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls.
+    Densidade calculada como pop_2023 / area_km2 (último ano oficial IBGE).
+    Coleta automatizada em src/arboviral/scraping/ibge_areas.py.
+  variaveis:
+    area_km2: {tipo: float, descricao: "área territorial em km² (IBGE 2024)"}
+    densidade_2023: {tipo: float, descricao: "habitantes / km² (último ano IBGE)"}
+
+vacinacao_febre_amarela:
+  fonte: datasus_pni
+  periodicidade: anual
+  observacao: |
+    Cobertura vacinal contra febre amarela publicada pelo PNI/DATASUS via
+    TabNet (consulta manual; arquivo em formato inteli.gente).
+    Cobertura: 1994-2026 com gaps (anos sem campanha agregada).
+    Dentro da janela 2015-2025 falta 2017 — preenchido por forward-fill
+    em build_master (cobertura varia <5p.p./ano em períodos sem campanha).
+    Valores >100% ocasionais: denominador-alvo (estimado pelo PNI) abaixo
+    do real em municípios com migração ou estimativa defasada — preservados.
+    Coleta: src/arboviral/scraping/pni_febre_amarela.py (verifica + documenta)
+    Parsing: src/arboviral/ingestion/vacinacao_fa.py (filtra SP)
+  variaveis:
+    cob_vac_fa_pct: {tipo: float, descricao: "% da população-alvo imunizada contra febre amarela (PNI)"}
+
+cobertura_esf:
+  fonte: e_gestor_ms_api_rest
+  periodicidade: mensal
+  observacao: |
+    Cobertura da Atenção Primária à Saúde (ex-Estratégia Saúde da Família).
+    Coletado via API REST descoberta no portal e-Gestor MS:
+      https://relatorioaps-prd.saude.gov.br/cobertura/{ab|aps}
+    Há quebra metodológica em 2021: AB (2015-2020, pcCoberturaAb) → APS
+    (2021-presente, qtCobertura). A coluna esf_metodologia documenta qual
+    foi usada em cada linha — feature útil para o modelo distinguir.
+    Coleta: src/arboviral/scraping/esf_coverage.py (132 arquivos JSON, ~380MB)
+    Parsing: src/arboviral/ingestion/esf.py (harmoniza os 2 formatos)
+  variaveis:
+    esf_metodologia: {tipo: categoria, valores: [AB, APS]}
+    esf_cobertura_pct: {tipo: float, descricao: "% cobertura APS/AB calculado pelo MS"}
+    esf_qt_equipes: {tipo: int, descricao: "número de equipes ESF do município"}
+    esf_qt_capacidade: {tipo: int, descricao: "capacidade total de atendimento (apenas APS, NaN para AB)"}
+    esf_pop_referencia: {tipo: int, descricao: "população usada como denominador pelo MS"}
+
+uso_do_solo:
+  fonte: mapbiomas_col_10_1
+  periodicidade: anual
+  observacao: |
+    Cobertura e uso da terra por município (MapBiomas Coleção 10.1).
+    Cobertura: 2015-2024. Para 2025, aplicamos forward-fill (cobertura
+    do solo varia <1%/ano em SP, ffill é conservadora).
+    Coleta: src/arboviral/scraping/mapbiomas.py (Google Drive, ~75 MB).
+    Parsing: src/arboviral/ingestion/mapbiomas.py (filtra SP, agrega
+    por class_level_1, calcula percentuais).
+    DOI: https://doi.org/10.58053/MapBiomas/SJZOLT
+  variaveis:
+    pct_floresta: {tipo: float, descricao: "% área com floresta natural"}
+    pct_agricultura: {tipo: float, descricao: "% área com agropecuária (pastagem + lavoura + silvicultura)"}
+    pct_nao_vegetado: {tipo: float, descricao: "% área urbanizada / não vegetada (cidades, infraestrutura, mineração)"}
+    pct_agua: {tipo: float, descricao: "% água / ambiente marinho"}
+    pct_natural_nao_florestal: {tipo: float, descricao: "% formação natural não florestal (cerrado aberto, campos, etc.)"}
+
 arboviroses:
   fonte: sinan_datasus
   periodicidade: mensal
@@ -49,6 +114,9 @@ arboviroses:
     "{doenca}_casos_provaveis": {tipo: int, descricao: "casos com classificação provável (apenas SINAN)"}
     "{doenca}_obitos": {tipo: int}
     "{doenca}_internacoes": {tipo: int, descricao: "apenas SINAN (HOSPITALIZ); não disponível para febre amarela"}
+    "{doenca}_latencia_mediana": {tipo: float, descricao: "mediana DT_NOTIFIC - DT_SIN_PRI em dias (proxy de qualidade da vigilância)"}
+    "{doenca}_latencia_p90": {tipo: float, descricao: "percentil 90 da latência (cauda longa, indica casos atrasados)"}
+    "{doenca}_n_casos_com_latencia": {tipo: int, descricao: "contagem de casos com DT_NOTIFIC e DT_SIN_PRI válidas"}
   features_derivadas_em_features:
     coef_incidencia: {tipo: float, descricao: "casos por 100 mil hab — calculado a partir de casos / populacao_estimada"}
     taxa_letalidade_pct: {tipo: float}

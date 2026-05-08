@@ -9,7 +9,7 @@ Fontes e estratégia de join:
   mensal  (cod_ibge, ano, mes): sinan_dengue, sinan_zika, sinan_chikungunya,
                                  febre_amarela, nasa_power, saude
   anual   (cod_ibge, ano):      ibge, socioeconomico, sinisa
-  estática (cod_ibge):          munic, habitacao
+  estática (cod_ibge):          munic, habitacao, densidade
   lookup  (cod_ibge):           nome, lat, lon, estação INMET
 
 Decisões metodológicas:
@@ -22,6 +22,9 @@ Decisões metodológicas:
     SINAN dengue/zika/chikungunya usam município de residência. Diferença
     metodológica preservada por ser intrínseca à natureza das doenças (FA é
     silvestre, transmissão fora do município de residência é regra).
+  - Vacinação FA: anual com gap em 2017 dentro de 2015-2025 — forward-fill no
+    grupo cod_ibge para preencher (cobertura vacinal varia <5p.p./ano em
+    janelas sem campanha).
 """
 import pandas as pd
 
@@ -56,10 +59,14 @@ def _grade_base() -> pd.DataFrame:
 def _sinan_prefixado(doenca: str) -> pd.DataFrame:
     df = pd.read_parquet(INTERIM / f"sinan_{doenca}.parquet")
     return df.rename(columns={
-        "casos_notificados": f"{doenca}_casos",
-        "casos_provaveis":   f"{doenca}_casos_provaveis",
-        "obitos":            f"{doenca}_obitos",
-        "internacoes":       f"{doenca}_internacoes",
+        "casos_notificados":      f"{doenca}_casos",
+        "casos_provaveis":        f"{doenca}_casos_provaveis",
+        "obitos":                 f"{doenca}_obitos",
+        "internacoes":            f"{doenca}_internacoes",
+        # Latência (proxy de qualidade da vigilância / subnotificação)
+        "latencia_mediana_dias":  f"{doenca}_latencia_mediana",
+        "latencia_p90_dias":      f"{doenca}_latencia_p90",
+        "n_casos_com_latencia":   f"{doenca}_n_casos_com_latencia",
     })
 
 
@@ -130,12 +137,50 @@ def build() -> pd.DataFrame:
         on="cod_ibge", how="left",
     )
 
+    print("  Juntando densidade populacional (área IBGE)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "densidade.parquet"),
+        on="cod_ibge", how="left",
+    )
+
+    print("  Juntando MapBiomas (uso do solo)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "mapbiomas.parquet"),
+        on=["cod_ibge", "ano"], how="left",
+    )
+
+    print("  Juntando ESF (cobertura APS, e-Gestor MS)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "esf.parquet"),
+        on=["cod_ibge", "ano", "mes"], how="left",
+    )
+
+    print("  Juntando vacinação febre amarela (PNI/DATASUS)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "vacinacao_fa.parquet"),
+        on=["cod_ibge", "ano"], how="left",
+    )
+
     # Ordenação canônica antes do forward-fill (importante para o ffill respeitar a ordem)
     df = df.sort_values(["cod_ibge", "ano", "mes"]).reset_index(drop=True)
 
     # População 2024-2025: IBGE só publica até 2023. Ver decisão metodológica no docstring.
     print("  Forward-fill populacao_estimada para 2024-2025...", flush=True)
     df["populacao_estimada"] = df.groupby("cod_ibge")["populacao_estimada"].ffill()
+
+    # Vacinação FA: PNI tem gap em 2017 dentro da janela 2015-2025 (CSV não cobre o ano).
+    # Forward-fill é seguro: cobertura vacinal varia <5p.p. interanualmente em períodos sem
+    # campanha, e 2017 não teve mudança brusca da política nacional para SP.
+    print("  Forward-fill cob_vac_fa_pct para preencher gap de 2017...", flush=True)
+    df["cob_vac_fa_pct"] = df.groupby("cod_ibge")["cob_vac_fa_pct"].ffill()
+
+    # MapBiomas só publica até 2024. Para 2025, ffill (cobertura do solo é estável ano a ano).
+    print("  Forward-fill MapBiomas para 2025...", flush=True)
+    cols_mb = [c for c in df.columns if c.startswith("pct_")
+               and c not in ("pct_pop_favelas_2022", "pop_aglom_subnorm_2010")]
+    cols_mb = [c for c in cols_mb if c in df.columns and not c.startswith("pop_")]
+    for c in cols_mb:
+        df[c] = df.groupby("cod_ibge")[c].ffill()
     # pib_per_capita também recalculado depois do ffill quando pib_mil_reais existir
     # (mas pib_mil_reais permanece NaN para 2024-2025; OK — variável separada)
 

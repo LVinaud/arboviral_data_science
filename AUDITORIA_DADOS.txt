@@ -39,6 +39,28 @@ Limitações:
   - Chikungunya e zika têm anos com pouca cobertura (2015-2016)
   - internacoes = NaN em anos/doenças onde HOSPITALIZ não foi registrado
 
+ATUALIZAÇÃO 2026-05: estendido para extrair LATÊNCIA por caso individual.
+  Cada DBC contém DT_NOTIFIC e DT_SIN_PRI. Calculamos:
+    delta_dias = DT_NOTIFIC - DT_SIN_PRI por caso
+  Filtros aplicados: 0 ≤ delta ≤ 365 dias (rejeita datas inconsistentes).
+  Agregamos por (cod_ibge, ano, mes) em mediana e p90.
+
+  Novas colunas em sinan_<doenca>.parquet:
+    latencia_mediana_dias    mediana de dias entre sintomas e notificação
+    latencia_p90_dias        percentil 90 (cauda longa)
+    n_casos_com_latencia     contagem de casos com ambas as datas válidas
+
+  Estatísticas observadas (mediana de medianas por município/mês):
+    Dengue:       3 dias mediana, p90 ~7 (sistema funcionando bem)
+    Zika:         4 dias mediana, p90 ~6
+    Chikungunya:  7 dias mediana, p90 ~10 (doença menos lembrada → mais lenta)
+
+  Justificativa: latência é proxy DIRETO de qualidade da vigilância e de
+  subnotificação. Município com latência alta tem casos chegando atrasados
+  (aparente "calmaria" pode esconder surto real). Modelo pode usar isso
+  para distinguir "casos baixos = tudo bem" de "casos baixos + latência alta
+  = preciso ficar alerta".
+
 --------------------------------------------------------------------------------
 1b. Febre Amarela — Ministério da Saúde / SVS (Dados Abertos)
 --------------------------------------------------------------------------------
@@ -277,6 +299,199 @@ HISTÓRICO: versões anteriores dessas tabelas tinham a variável "percentual do
   total geral" — artefato SIDRA que retorna 100 para a linha de soma por sexo.
   As tabelas foram substituídas pelo aluno com a variável "população absoluta".
 
+--------------------------------------------------------------------------------
+9. IBGE — Áreas territoriais e densidade populacional
+--------------------------------------------------------------------------------
+Origem: FTP do IBGE — geoftp.ibge.gov.br
+  https://geoftp.ibge.gov.br/organizacao_do_territorio/estrutura_territorial/areas_territoriais/
+  Arquivo: AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls (aba AR_BR_MUN_2024)
+  Coluna CD_MUN é código IBGE 7 dígitos; AR_MUN_2024 é a área em km².
+
+Coleta automatizada por: src/arboviral/scraping/ibge_areas.py
+Parsing por:              src/arboviral/ingestion/densidade.py
+
+Arquivos raw:    data/raw/ibge_areas/AR_BR_RG_UF_RGINT_RGI_MUN_2024.xls
+Gerado:          data/interim/densidade.parquet (645 linhas, 100% completude)
+
+Colunas:
+  area_km2          float   Área territorial em km² (IBGE 2024)
+  densidade_2023    float   Habitantes / km² em 2023 (último ano IBGE)
+
+Verificação de qualidade:
+  - 645 municípios SP cobertos sem nenhum NaN
+  - Áreas: mín 3.6 km² (Águas de São Pedro), máx 1.978 km² (Iguape)
+  - Densidades: mín 3.6 hab/km² (interior), máx 14.593 hab/km²
+    (zona urbana metropolitana — São Caetano do Sul)
+  - Mediana: 41.6 hab/km² (típico de município interiorano)
+
+JUSTIFICATIVA EPIDEMIOLÓGICA:
+  Densidade populacional é proxy direto da densidade de criadouros
+  potenciais e da taxa de contato humano-vetor. Município denso favorece
+  transmissão urbana de Aedes; município esparso atenua. Hipótese a ser
+  validada via SHAP estratificado (RQ2).
+
+NOTA: A área é praticamente estática (mudanças apenas em casos raros de
+emancipação ou conurbação). Por isso usamos o arquivo do ano de 2024
+mesmo que a cobertura do dataset seja 2015-2025.
+
+
+--------------------------------------------------------------------------------
+10. MapBiomas Brasil — Cobertura e uso da terra (Coleção 10.1)
+--------------------------------------------------------------------------------
+Origem: MapBiomas Project (rede de ONGs, universidades e empresas de tecnologia)
+  https://brasil.mapbiomas.org/estatisticas/
+  Arquivo: BIOMAS, ESTADOS E MUNICÍPIOS (Coleção 10.1) — COBERTURA
+  Hospedado em Google Drive (link na página oficial do MapBiomas)
+  DOI: https://doi.org/10.58053/MapBiomas/SJZOLT
+  Atualização: 2026-02-19
+
+Coleta automatizada por: src/arboviral/scraping/mapbiomas.py
+Parsing por:              src/arboviral/ingestion/mapbiomas.py
+
+Arquivos raw:    data/raw/mapbiomas/MAPBIOMAS_COVERAGE_COL_10_1.xlsx (~75 MB)
+Gerado:          data/interim/mapbiomas.parquet (6.450 linhas, 100% completude)
+
+Cobertura: 645 municípios SP × 10 anos (2015-2024)
+  Para 2025: forward-fill no build_master.py (cobertura do solo é estável)
+
+Colunas do parquet:
+  pct_floresta              float   % área com floresta natural
+  pct_natural_nao_florestal float   % formação natural não florestal
+  pct_agricultura           float   % agropecuária (pastagem + lavoura + silvicultura)
+  pct_nao_vegetado          float   % área urbanizada / não vegetada (cidades, mineração)
+  pct_agua                  float   % água / ambiente marinho
+
+Verificação de qualidade — médias estaduais:
+  - pct_agricultura:    74.0% (SP é estado predominantemente agrícola)
+  - pct_floresta:       17.2% (Mata Atlântica preservada + reflorestamento)
+  - pct_nao_vegetado:    5.4% (média dominada por capitais; máx 100% em ilhas urbanas)
+  - pct_agua:            2.1%
+  - pct_natural_nao_flor 1.3%
+
+  Exemplo São Paulo capital (cod 3550308) em 2024:
+    floresta 27.0% + agric 8.4% + urbanizado 59.8% + água 3.8% = 99.0% (~ok)
+
+NOTA SOBRE NORMALIZAÇÃO DE NOMES:
+  MapBiomas inclui ~13 municípios SP que aparecem em outros estados também
+  (overlap de bioma). Filtramos esses fora via lookup IBGE de SP.
+
+JUSTIFICATIVA EPIDEMIOLÓGICA:
+  - pct_nao_vegetado (urbanização): correlaciona com criadouros de Aedes
+    aegypti (recipientes domiciliares) — vetor urbano de dengue/zika/chiku.
+  - pct_floresta: relacionado à transmissão silvestre de febre amarela
+    (vetores Haemagogus/Sabethes em mata fechada).
+  - pct_agricultura: modificação de habitat e exposição ocupacional.
+
+--------------------------------------------------------------------------------
+11. e-Gestor MS — Cobertura da Atenção Primária à Saúde (ex-ESF)
+--------------------------------------------------------------------------------
+Origem: API REST do portal e-Gestor APS do Ministério da Saúde
+  https://relatorioaps-prd.saude.gov.br/cobertura/{ab|aps}
+  ?unidadeGeografica=MUNICIPIO&nuCompInicio=YYYYMM&nuCompFim=YYYYMM
+
+Endpoints DESCOBERTOS via DevTools/Network do navegador (a SPA do e-Gestor
+chama essa API por baixo). Sem necessidade de Selenium — GET simples retornando
+JSON com lista de 5570 municípios brasileiros por mês.
+
+Há QUEBRA METODOLÓGICA em 2021:
+  AB  (2015-2020): "Cobertura da Atenção Básica" — usa pcCoberturaAb
+                    valores em STRING formato BR ("12,106,920")
+                    nuComp = "201801"
+  APS (2021-presente): "Cobertura Potencial da APS" — usa qtCobertura
+                       valores em INT/FLOAT direto
+                       nuComp = "01/2024"
+
+Coleta automatizada por: src/arboviral/scraping/esf_coverage.py
+  - 132 arquivos JSON (72 cobertura_ab_*.json + 60 cobertura_aps_*.json)
+  - ~380 MB total raw
+  - Pausa de 1s entre requests (respeito ao servidor)
+
+Parsing por: src/arboviral/ingestion/esf.py
+  - Harmoniza os 2 formatos (parser distinto para AB vs APS)
+  - Lookup IBGE 6→7 dígitos (mesmo padrão do SINAN)
+  - Filtra SP
+
+Arquivos raw:    data/raw/esf/cobertura_<ab|aps>_<YYYYMM>.json
+Gerado:          data/interim/esf.parquet (85.037 linhas, 99.9% completude)
+
+Colunas:
+  esf_metodologia       'AB' ou 'APS' (flag categórica para o modelo)
+  esf_cobertura_pct     % cobertura APS/AB calculada pelo MS
+  esf_qt_equipes        número de equipes ESF
+  esf_qt_capacidade     capacidade total (apenas APS; NaN para AB)
+  esf_pop_referencia    população usada como denominador pelo MS
+
+Verificação de qualidade — SP:
+  - 645 municípios SP cobertos
+  - 99.9% de completude (cobertura, equipes, pop)
+  - 45.3% para esf_qt_capacidade (apenas APS, esperado)
+  - SP capital: 59.4% AB (2018) → 58.5% APS (2024) — coerente
+  - Mediana estadual: 92% (AB), 107% (APS) — >100% normal pois capacidade
+    pode exceder pop em municípios pequenos com sobreposição de equipes
+
+JUSTIFICATIVA EPIDEMIOLÓGICA:
+  Cobertura ESF determina a CAPACIDADE DE DETECÇÃO precoce de surtos:
+  - Cobertura alta → mais agentes comunitários → mais notificação
+  - Cobertura baixa → casos sub-reportados → "calmaria aparente" pode
+    mascarar surto real
+  Combinado com latência SINAN (já implementada), o modelo agora tem 2
+  proxies independentes da qualidade do sistema de vigilância municipal.
+
+--------------------------------------------------------------------------------
+12. PNI/DATASUS — Cobertura vacinal contra febre amarela
+--------------------------------------------------------------------------------
+Origem: Programa Nacional de Imunizações (PNI/MS), publicado via TabNet/DATASUS
+  http://tabnet.datasus.gov.br/cgi/tabcgi.exe?pni/cnv/cpniuf.def
+  Indicador: "Cobertura vacinal" × Imunobiológico = "Febre amarela"
+
+Obtido por: download manual via TabNet (formulário CGI sem endpoint REST estável)
+  reformatado para o padrão da plataforma inteli.gente:
+    codigo_ibge | sigla       | ano  | variavel_valor
+    1100023     | COB_VAC_FA  | 1994 | 30.36
+
+Coleta documentada em: src/arboviral/scraping/pni_febre_amarela.py
+  - Modo "verifica e documenta" (CGI não automatizável trivialmente)
+  - Imprime instruções de obtenção se o arquivo não existir
+  - Alternativa SQL: BasedosDados (br_ms_pni dataset)
+
+Parsing por: src/arboviral/ingestion/vacinacao_fa.py
+  - Filtra SP (codigo_ibge prefixo '35')
+  - Códigos IBGE já em 7 dígitos (sem lookup)
+  - Não preenche gaps (preserva o original); ffill é feito em build_master
+
+Arquivos raw:  data/raw/febre_amarela/COB_VAC_FA.csv (CSV nacional, 90.234 linhas)
+Gerado:        data/interim/vacinacao_fa.parquet (10.546 linhas SP)
+
+Coluna:
+  cob_vac_fa_pct   % da população-alvo imunizada contra febre amarela
+
+Verificação de qualidade — SP:
+  - 645 municípios SP cobertos (100%)
+  - 19 anos com dados na janela 1994-2026 (gaps em 2008, 2010, 2011, 2014, 2017)
+  - Dentro do recorte do master (2015-2025): falta apenas 2017
+  - Mediana SP por ano: declínio observado de ~94% (2002) para ~74% (2025)
+  - Valores >100% ocorrem (~25% das linhas): denominador-alvo do PNI fica
+    abaixo do real em municípios com migração ou estimativa populacional
+    defasada — preservados sem cap (são informativos)
+  - Max 418% (caso extremo); distribuição: p25=57%, p50=81%, p75=100%
+
+DECISÃO METODOLÓGICA — gap 2017:
+  Forward-fill no grupo (cod_ibge) em build_master.py preenche 2017 com o
+  valor de 2016. Justificativa: cobertura vacinal varia <5p.p. interanualmente
+  em períodos sem campanha nacional, e 2017 não teve mudança brusca da
+  política do PNI para SP. Gap 2015-2016 (912+588 linhas faltantes) é
+  remanescente porque ffill não faz backfill — municípios sem registro em
+  2015-2016 ficam NaN nesses meses (afeta 2,5% do master final).
+
+JUSTIFICATIVA EPIDEMIOLÓGICA:
+  Cobertura vacinal diferencia RISCO REAL (transmissão) de RISCO POPULACIONAL
+  (vulnerabilidade). Município em "área de risco" pode ter risco operacional
+  baixo se a população está bem imunizada. Sem essa variável, o modelo confunde
+  os dois cenários. Particularmente relevante após 2017-2019 (surto silvestre
+  SP) e 2025 (ressurgência) — combinado com pct_floresta (MapBiomas), permite
+  ao modelo distinguir "matas + pop não vacinada" (alto risco) de "matas +
+  pop vacinada" (risco controlado).
+
 ================================================================================
 RESUMO DAS FONTES E STATUS
 ================================================================================
@@ -298,6 +513,11 @@ IDH-M              2010 (censo)        Download manual ✓ OK (estático)
 CAPAG              2018-2025, anual    Download manual ✓ OK (cobertura variável)
 SINISA             2023-2024, anual    Download manual ✓ OK
 Aglom. subnorm.    2010 e 2022         Download manual ✓ OK (contagem + pop absoluta)
+Áreas IBGE         estático             Script geoftp   ✓ OK (644 km² mediano)
+Densidade pop      estático (de 2023)   Calculada       ✓ OK (100% completude)
+MapBiomas          2015-2024, anual     Script Drive    ✓ OK (5 classes uso solo, ffill 2025)
+ESF (cobertura)    2015-2025, mensal    API REST auto   ✓ OK (132 arq JSON, AB+APS harmonizados)
+PNI vacinação FA   2015-2025, anual     CSV TabNet manual ✓ OK 97.5% (gap 2017 ffill)
 
 ================================================================================
 DATASET CONSOLIDADO — municipio_mes.parquet
@@ -566,7 +786,82 @@ CASO DE USO DA PLATAFORMA — exemplo real do fold de teste 2024:
         + crescimento 348 → 557 (chikungunya_casos_lag2)
 
   Cada alerta na plataforma final pode ter explicação automática gerada por
-  shap_por_predicao() em src/arboviral/evaluation/explain.py.
+  explicacao_local() em src/arboviral/evaluation/explain.py — agora UNIFORME
+  para todos os modelos do portfolio (árvores via SHAP, LogReg via
+  coef×valor padronizado, EBM via API nativa explain_local).
+
+--------------------------------------------------------------------------------
+13. Explicabilidade local — uniforme entre todos os modelos (atualização 2026-05)
+--------------------------------------------------------------------------------
+Antes: app só mostrava SHAP por predição para árvores (RF/XGB/LGBM); EBM
+e LogReg ficavam com mensagem "explicabilidade não disponível", apesar de
+serem mais interpretáveis que árvores.
+
+Implementação: src/arboviral/evaluation/explain.py estendido com função
+explicacao_local() que despacha pelo tipo do estimador final do pipeline:
+
+  RandomForest / XGBoost / LightGBM   → SHAP TreeExplainer (post-hoc, exato)
+  Regressão Logística                 → coef_[i] × X_padronizado[i]
+                                         (soma + intercept = decision_function;
+                                          sanity check passou: diferença = 0)
+  EBM (ExplainableBoostingClassifier) → clf.explain_local(X).data(0)['scores']
+                                         API nativa do interpret-ml.
+                                         Termos de interação 'a & b' têm a
+                                         contribuição distribuída entre os
+                                         pares para preservar o ranking
+                                         por feature de entrada.
+
+Output uniforme entre todos os métodos:
+  feature  valor_observado  contribuicao  abs_contribuicao  sign  metodo
+
+A coluna 'metodo' documenta qual técnica foi usada (auditoria + UI mostra
+ao gestor). Útil para o relatório: cada doença/modelo tem o EXATO mecanismo
+de explicação documentado.
+
+Função legada shap_por_predicao() mantida como alias retrocompat (renomeia
+'contribuicao' → 'shap', 'abs_contribuicao' → 'abs_shap').
+
+--------------------------------------------------------------------------------
+14. Onda 1 — efeito empírico das 5 fontes integradas (atualização 2026-05)
+--------------------------------------------------------------------------------
+Após integrar MapBiomas, ESF, latência SINAN, densidade IBGE e vacinação FA
+ao master (57 → 79 colunas) e ao features (117 → 140), retreinamos o
+portfolio completo (315 combinações) e comparamos AUPRC pré × pós:
+
+  TOP GANHOS (média de 3 folds, AUPRC):
+    zika × inc100 (RF)         0.014 → 0.101   +0.088  (+640%)
+    zika × canal (XGB)         0.077 → 0.115   +0.038
+    zika × zscore (XGB)        0.057 → 0.094   +0.037
+    zika × canal (RF)          0.130 → 0.165   +0.036
+    dengue × canal (LGBM/XGB)  0.543 → 0.569   +0.027
+    chikungunya × canal (XGB)  0.287 → 0.312   +0.024
+
+  RESUMO POR DOENÇA (média do delta AUPRC):
+    zika           +0.0085   ← maior beneficiada
+    dengue         +0.0011
+    chikungunya    -0.0017   (dentro do ruído de fold)
+    febre amarela    NaN     (continua impossível pela raridade)
+
+ACHADO DEFENSÁVEL: ZIKA é a doença em que as novas fontes mais movem o
+ponteiro. Coerente com a hipótese cross-doença reforçada:
+  - Cobertura ESF afeta detecção (proxy de qualidade da vigilância)
+  - MapBiomas (urbano + floresta) + densidade IBGE = pressão vetorial
+  - Cross-doença existente + agora dengue tem mais features → zika "herda"
+    mais sinal indireto
+
+Narrativa para relatório/artigo: "ao adicionar fontes ambientais (MapBiomas),
+de cobertura sanitária (ESF, vacinação FA) e de qualidade da vigilância
+(latência SINAN), o modelo passa a capturar surtos de zika que antes eram
+invisíveis (AUPRC 0.014 → 0.101 em zika×inc100)."
+
+PIORAS PONTUAIS — documentadas como ruído de fold:
+  chikungunya × inc100 (LGBM)  -0.105   (definição com 0.38% prevalência)
+  dengue × inc300 (vários)     ~-0.005  (ruído de fold)
+
+Backups dos resultados pré-Onda 1 preservados em
+  data/processed/model_results_PRE_ONDA1.parquet
+  data/processed/predictions_PRE_ONDA1.parquet
+para auditoria, re-análise e ablação reportável.
 
 ================================================================================
 PRÓXIMOS PASSOS

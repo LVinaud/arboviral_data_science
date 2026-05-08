@@ -18,8 +18,13 @@ Funções principais:
   resumo_global(modelo, X, nome) → top features de qualquer modelo do portfolio
 
 Para a plataforma (objetivo: "gestor, sua cidade está em risco POR ESSES MOTIVOS"),
-o SHAP por predição é o uso típico:
-  shap_por_predicao(modelo, X_municipio) → contribuição de cada feature
+a explicação local é o uso típico:
+  explicacao_local(modelo, X_municipio) → top features que impulsionaram a
+  predição naquele município/mês. Despacha para SHAP (árvore), coef×valor
+  padronizado (LogReg) ou explain_local nativo (EBM) conforme o tipo do clf.
+  Output uniforme: [feature, valor_observado, contribuicao, sign, metodo].
+
+  Alias retrocompat: shap_por_predicao() — renomeia 'contribuicao' para 'shap'.
 """
 from __future__ import annotations
 
@@ -123,35 +128,160 @@ def resumo_global(modelo, X: pd.DataFrame, nome_modelo: str, top: int = 20) -> p
     return df.reset_index(drop=True)
 
 
-def shap_por_predicao(
+def _classe_clf(modelo) -> str:
+    """Nome da classe do estimador final do pipeline (ex.: 'RandomForestClassifier')."""
+    return type(_extrair_clf(modelo)).__name__
+
+
+def _explicacao_tree(modelo, X_amostra: pd.DataFrame) -> np.ndarray:
+    """SHAP TreeExplainer — funciona em RF, XGBoost, LightGBM."""
+    import shap
+
+    clf = _extrair_clf(modelo)
+    X_imp = _aplicar_imputer(modelo, X_amostra)
+    explainer = shap.TreeExplainer(clf)
+    vals = explainer.shap_values(X_imp)
+    # Binário: alguns retornam só classe pos, outros lista [neg, pos], outros 3D
+    if isinstance(vals, list) and len(vals) == 2:
+        vals = vals[1]
+    elif hasattr(vals, "ndim") and vals.ndim == 3:
+        vals = vals[..., 1]
+    return np.asarray(vals).reshape(-1)
+
+
+def _explicacao_logreg(modelo, X_amostra: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
+    """LogReg: contribuição de cada feature na predição = coef × valor_padronizado.
+
+    Como o pipeline tem StandardScaler antes do clf, o modelo "vê" os valores
+    padronizados — a contribuição honesta é coef * X_scaled, não coef * X cru.
+    A soma dessas contribuições + intercept_ produz exatamente o logit da
+    predição (sanity check).
+
+    Retorna (contribuicoes, colunas_alinhadas) — a lista de colunas pode ser
+    um SUBCONJUNTO de X_amostra.columns se o pipeline foi treinado com filtro.
+    """
+    clf = _extrair_clf(modelo)
+    # Restringe X às colunas que o pipeline conhece (algumas features podem ter
+    # sido filtradas no train — ver feature_names_in_ do primeiro transformador).
+    cols_modelo = None
+    if hasattr(modelo, "named_steps"):
+        primeira = next(iter(modelo.named_steps.values()))
+        if hasattr(primeira, "feature_names_in_"):
+            cols_modelo = list(primeira.feature_names_in_)
+    if cols_modelo:
+        # Adiciona colunas faltantes como NaN; remove colunas extras
+        X_align = X_amostra.copy()
+        for c in cols_modelo:
+            if c not in X_align.columns:
+                X_align[c] = float("nan")
+        X_align = X_align[cols_modelo]
+    else:
+        X_align = X_amostra
+
+    X_pre = X_align
+    if hasattr(modelo, "named_steps"):
+        for nome, etapa in modelo.named_steps.items():
+            if nome == "clf":
+                break
+            X_pre = etapa.transform(X_pre)
+    X_arr = np.asarray(X_pre).reshape(-1)
+    return clf.coef_[0] * X_arr, list(cols_modelo or X_amostra.columns)
+
+
+def _explicacao_ebm(modelo, X_amostra: pd.DataFrame) -> np.ndarray:
+    """EBM: API nativa do interpret-ml — `explain_local` retorna a contribuição
+    aditiva de cada feature/par de features para a predição em logit.
+
+    Mais fiel ao modelo do que SHAP em GAM, porque o EBM literalmente soma
+    essas funções para gerar a predição. Inclui termos de interação (pares),
+    que aqui são listados pelo nome 'feat_a & feat_b' e desempatados pelo
+    valor absoluto da contribuição.
+
+    Para alinhar com o output das outras funções (uma linha por feature de
+    entrada), distribuímos a contribuição de interações ao primeiro membro
+    do par — opção pragmática para ranking.
+    """
+    clf = _extrair_clf(modelo)
+    X_imp = _aplicar_imputer(modelo, X_amostra)
+
+    expl = clf.explain_local(X_imp)
+    data = expl.data(0)
+    nomes = data["names"]                    # nomes na ordem do EBM (incluindo pares 'a & b')
+    scores = np.asarray(data["scores"])      # contribuição em logit por termo
+    cols_originais = list(X_imp.columns)
+
+    # Agrega: para termos main, soma direto na coluna; para pares 'a & b',
+    # soma metade em 'a' e metade em 'b' (preserva total e mantém o ranking
+    # consistente com o efeito real).
+    contrib = np.zeros(len(cols_originais))
+    for nome, score in zip(nomes, scores):
+        if " & " in str(nome):
+            partes = [p.strip() for p in str(nome).split(" & ")]
+            for p in partes:
+                if p in cols_originais:
+                    contrib[cols_originais.index(p)] += score / len(partes)
+        else:
+            if nome in cols_originais:
+                contrib[cols_originais.index(nome)] += score
+    return contrib
+
+
+def explicacao_local(
     modelo, X_amostra: pd.DataFrame, top: int = 5
 ) -> pd.DataFrame:
     """Para UMA predição (1 linha), top features que mais contribuíram.
 
-    Use case: gestor, seu município está em risco POR ESSES MOTIVOS (ordenados).
-    Coluna 'sign' indica se a feature aumentou (+) ou diminuiu (-) o risco.
-    """
-    import shap
+    Despacha pelo tipo do estimador final do pipeline:
+      - RandomForest, XGBoost, LightGBM   → SHAP TreeExplainer
+      - LogisticRegression                → coef × valor_padronizado
+      - ExplainableBoostingClassifier     → API nativa do EBM (explain_local)
 
+    Use case: gestor, seu município está em risco POR ESSES MOTIVOS (ordenados).
+    Output uniforme:
+      feature  valor_observado  contribuicao  abs_contribuicao  sign  metodo
+    """
     if len(X_amostra) != 1:
         raise ValueError("Esperando exatamente uma linha em X_amostra")
 
-    clf = _extrair_clf(modelo)
-    X_imp = _aplicar_imputer(modelo, X_amostra)
+    classe = _classe_clf(modelo)
+    cols = list(X_amostra.columns)
+    if classe in ("RandomForestClassifier", "XGBClassifier", "LGBMClassifier"):
+        contrib = _explicacao_tree(modelo, X_amostra)
+        metodo = "SHAP (TreeExplainer)"
+    elif classe == "LogisticRegression":
+        contrib, cols = _explicacao_logreg(modelo, X_amostra)
+        metodo = "Coeficiente × valor padronizado"
+    elif classe == "ExplainableBoostingClassifier":
+        contrib = _explicacao_ebm(modelo, X_amostra)
+        metodo = "EBM explain_local (nativo)"
+    else:
+        raise NotImplementedError(
+            f"Explicação local não implementada para {classe}. "
+            "Modelos suportados: árvore (RF/XGB/LGBM), LogReg, EBM."
+        )
 
-    explainer = shap.TreeExplainer(clf)
-    shap_vals = explainer.shap_values(X_imp)
-    if isinstance(shap_vals, list) and len(shap_vals) == 2:
-        shap_vals = shap_vals[1]
-    elif hasattr(shap_vals, "ndim") and shap_vals.ndim == 3:
-        shap_vals = shap_vals[..., 1]
-    shap_vals = np.asarray(shap_vals).reshape(-1)
-
+    # Valor observado: lê do X_amostra alinhado às colunas usadas pelo modelo.
+    valores = []
+    for c in cols:
+        v = X_amostra[c].iloc[0] if c in X_amostra.columns else float("nan")
+        valores.append(v)
     df = pd.DataFrame({
-        "feature": list(X_imp.columns),
-        "valor_observado": X_imp.iloc[0].values,
-        "shap": shap_vals,
-        "abs_shap": np.abs(shap_vals),
-        "sign": ["+" if v >= 0 else "-" for v in shap_vals],
-    }).sort_values("abs_shap", ascending=False).reset_index(drop=True)
+        "feature": cols,
+        "valor_observado": np.asarray(valores, dtype=float),
+        "contribuicao": contrib,
+        "abs_contribuicao": np.abs(contrib),
+        "sign": ["+" if v >= 0 else "-" for v in contrib],
+        "metodo": metodo,
+    }).sort_values("abs_contribuicao", ascending=False).reset_index(drop=True)
     return df.head(top)
+
+
+def shap_por_predicao(modelo, X_amostra: pd.DataFrame, top: int = 5) -> pd.DataFrame:
+    """Alias retrocompat: chama `explicacao_local` e renomeia coluna p/ 'shap'.
+
+    Mantido pela base de código antiga (app/lib/predicao.py:justificar_alerta).
+    Quando o modelo é EBM/LogReg, 'shap' guarda a contribuição nativa daquele
+    modelo, não SHAP propriamente dito — ver coluna `metodo`.
+    """
+    df = explicacao_local(modelo, X_amostra, top=top)
+    return df.rename(columns={"contribuicao": "shap", "abs_contribuicao": "abs_shap"})
