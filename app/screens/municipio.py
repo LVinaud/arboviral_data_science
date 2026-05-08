@@ -259,6 +259,18 @@ if modelo in ("persistencia", "climatologia"):
         "LightGBM, Regressão Logística ou EBM) para ver a justificativa."
     )
 else:
+    # Quantos fatores mostrar — default 8 (panorama rápido); "Todos" abre os 137.
+    _opcoes_top = ["5", "8", "15", "30", "50", "Todos"]
+    qtd_sel = st.radio(
+        "Quantos fatores exibir?", _opcoes_top, index=1, horizontal=True,
+        help=(
+            "Padrão é top 8 — suficiente para identificar os principais drivers. "
+            "'Todos' lista as ~137 features na ordem de contribuição absoluta "
+            "(útil para auditoria do modelo)."
+        ),
+    )
+    qtd_top = 9999 if qtd_sel == "Todos" else int(qtd_sel)
+
     with st.spinner("Carregando modelo e computando explicação..."):
         mdl = carregar_modelo(doenca, definicao, modelo, fold)
         if mdl is None:
@@ -298,7 +310,7 @@ else:
             X_amostra = X_amostra[cols_esperadas]
 
             try:
-                top = justificar_alerta(mdl, X_amostra, top=8)
+                top = justificar_alerta(mdl, X_amostra, top=qtd_top)
                 max_abs = float(top["contribuicao"].abs().max())
                 metodo_usado = top["metodo"].iloc[0]
                 # Resumo no topo: chip de risco + mês + método

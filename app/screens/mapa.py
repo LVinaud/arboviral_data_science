@@ -147,8 +147,11 @@ fig.update_layout(
 st.plotly_chart(fig, use_container_width=True)
 
 # --- Top 5 críticos ---
-top5 = df.nlargest(5, "prob_predita")[["nome_municipio", "cod_ibge", "prob_predita", "y_true"]]
+top5 = df.nlargest(5, "prob_predita")[["nome_municipio", "cod_ibge", "prob_predita", "y_true"]].copy()
 if not top5.empty:
+    top5["prob_pct"] = top5["prob_predita"] * 100
+    top5["surto_real"] = top5["y_true"].map({1: "Sim", 0: "Não"})
+    top5 = top5[["nome_municipio", "cod_ibge", "prob_pct", "surto_real"]]
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     st.markdown(
         '<div class="card-section-label">Top 5 municípios em maior risco</div>',
@@ -161,10 +164,10 @@ if not top5.empty:
         column_config={
             "nome_municipio": "Município",
             "cod_ibge": st.column_config.TextColumn("Código IBGE", width="small"),
-            "prob_predita": st.column_config.ProgressColumn(
-                "Probabilidade", min_value=0, max_value=1, format="%.2f",
+            "prob_pct": st.column_config.ProgressColumn(
+                "Probabilidade", min_value=0, max_value=100, format="%.0f%%",
             ),
-            "y_true": st.column_config.NumberColumn("Surto real?", format="%d", width="small"),
+            "surto_real": st.column_config.TextColumn("Surto real?", width="small"),
         },
     )
 

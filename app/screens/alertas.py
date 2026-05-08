@@ -156,9 +156,12 @@ else:
     )
     df_display["surto_real"] = df_display["y_true"].map({1: "Sim", 0: "Não"})
     df_display["em_surto_agora"] = df_display["surto_atual"].map({1: "Sim", 0: "Não"})
+    # ProgressColumn com format "%" não multiplica internamente — passamos
+    # o valor já em escala 0-100 para que "%.0f%%" produza ex.: "85%".
+    df_display["prob_pct"] = df_display["prob_predita"] * 100
     df_display = df_display[[
         "categoria", "nome_municipio", "cod_ibge",
-        "mes_predito", "prob_predita", "surto_real", "em_surto_agora",
+        "mes_predito", "prob_pct", "surto_real", "em_surto_agora",
     ]]
     st.dataframe(
         df_display,
@@ -169,8 +172,8 @@ else:
             "nome_municipio": "Município",
             "cod_ibge": st.column_config.TextColumn("Código IBGE", width="small"),
             "mes_predito": st.column_config.TextColumn("Mês predito"),
-            "prob_predita": st.column_config.ProgressColumn(
-                "Probabilidade", min_value=0, max_value=1, format="%.0f%%",
+            "prob_pct": st.column_config.ProgressColumn(
+                "Probabilidade", min_value=0, max_value=100, format="%.0f%%",
             ),
             "surto_real": st.column_config.TextColumn(
                 "Surto real?",
