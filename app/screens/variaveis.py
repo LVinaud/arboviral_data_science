@@ -62,10 +62,18 @@ def _construir_catalogo() -> pd.DataFrame:
         n_nan = int(s.isna().sum())
         nan_pct = (n_nan / n_total * 100) if n_total else 0.0
 
-        if pd.api.types.is_bool_dtype(s):
+        # Booleano "verdadeiro" (dtype bool) OU booleano disfarcado em object
+        # (acontece quando ha NaN: pandas promove bool para object).
+        unicos_nao_nan = set(s.dropna().unique())
+        eh_bool_disfarcado = unicos_nao_nan and unicos_nao_nan.issubset({True, False, 0, 1})
+        if pd.api.types.is_bool_dtype(s) or eh_bool_disfarcado:
             tipo = "booleana"
             mn, mx, media = None, None, None
-            extra = f"{int(s.sum())} verdadeiros / {n_total - n_nan - int(s.sum())} falsos"
+            # eq(True) trata NaN como nao-True automaticamente, sem warning de
+            # downcasting do pandas (fillna+astype emite FutureWarning).
+            n_true = int(s.eq(True).sum())
+            n_false = (n_total - n_nan) - n_true
+            extra = f"{n_true:,} verdadeiros / {n_false:,} falsos".replace(",", ".")
         elif pd.api.types.is_numeric_dtype(s):
             tipo = "numérica"
             valores = s.dropna()
