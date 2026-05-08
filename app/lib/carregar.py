@@ -50,7 +50,7 @@ def carregar_labels() -> pd.DataFrame:
 
 @st.cache_data(show_spinner="Carregando features...")
 def carregar_features() -> pd.DataFrame:
-    """features.parquet — input para os modelos (117 colunas, sem leakage)."""
+    """features.parquet — input para os modelos (~140 colunas após Onda 1, sem leakage)."""
     return pd.read_parquet(PROCESSED / "features.parquet")
 
 
