@@ -2,9 +2,9 @@
 
 > Plataforma Automatizada para Prevenção e Resposta a Arboviroses Usando Inteligência Artificial
 
-> **Branches:**
-> - `main` — pipeline de dados, rotulagem e modelagem (ciência de dados pura, autossuficiente)
-> - `experimental/platform-app` — interface Streamlit para gestores; depende deste pacote, mas este pacote NÃO depende dela. Veja [`app/README.md`](app/README.md) na branch experimental.
+> **Estrutura do repositório (branch única `main` desde 2026-05-08):**
+> - `src/arboviral/` — pipeline de dados, rotulagem e modelagem (ciência de dados pura, autossuficiente)
+> - `app/` — interface Streamlit para gestores; depende do pacote `arboviral`, mas o pacote NÃO depende do app. Veja [`app/README.md`](app/README.md).
 
 Iniciação Científica (Programa Unificado de Bolsas — PUB) desenvolvida no **Instituto de Ciências Matemáticas e de Computação da USP (ICMC-USP)** em São Carlos.
 
@@ -138,7 +138,7 @@ Todos os modelos ML usam `class_weight='balanced'` (XGBoost via `scale_pos_weigh
   - **EBM (Explainable Boosting Classifier)** → API nativa `clf.explain_local()` do interpret-ml. Termos de interação 'a & b' têm a contribuição distribuída entre os pares para preservar o ranking por feature de entrada
 - Output uniforme: DataFrame com `feature, valor_observado, contribuicao, abs_contribuicao, sign, metodo`. A coluna `metodo` documenta qual técnica foi usada (útil para auditoria e para a UI mostrar ao gestor).
 - Funções legadas mantidas: `shap_tree()`, `importancias_logreg()`, `importancias_ebm()`, `shap_por_predicao()` (alias retrocompat).
-- Use case da plataforma: o app Streamlit (`experimental/platform-app`) chama `explicacao_local()` para qualquer modelo selecionado pelo gestor — não está mais limitado a RF/XGB/LGBM.
+- Use case da plataforma: o app Streamlit (`app/`) chama `explicacao_local()` para qualquer modelo selecionado pelo gestor — não está mais limitado a RF/XGB/LGBM.
 
 **Treino e análise:**
 ```bash
@@ -223,7 +223,7 @@ A narrativa para o relatório/artigo é forte: **ao adicionar fontes ambientais 
 1. **Sensitivity analysis com `--no-cross`**: quantificar o ganho de incluir features cross-doença (mascaramento ainda placeholder em `train.py`)
 2. **Hyperparameter tuning** com Optuna (atual usa defaults)
 3. **Calibração de probabilidades** (importante para uso em produção)
-4. **Plataforma**: interface integrada à inteli.gente, exibindo top features para cada alerta. App Streamlit funcional na branch `experimental/platform-app` — design system completo, 6 telas (Visão geral, Alertas, Município, Mapa, Comparativo, Sobre), explicabilidade local para todos os modelos do portfolio (não apenas árvores).
+4. **Plataforma**: interface integrada à inteli.gente, exibindo top features para cada alerta. App Streamlit funcional em `app/` — design system completo, 7 telas (Visão geral, Alertas, Município, Mapa, Comparativo, Variáveis, Sobre), explicabilidade local para todos os modelos do portfolio (não apenas árvores).
 5. **5 fontes restantes do top 10**: LIRAa (prioridade #1 — único do top 3 ainda pendente), mobilidade pendular, SIH-SUS, eventos massivos, NDVI.
 6. Trabalho futuro: MEM (L5) via ponte R, framing alternativo para FA (anomaly detection).
 

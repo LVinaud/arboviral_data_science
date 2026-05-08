@@ -1,9 +1,9 @@
 """
 Plataforma de Alerta Precoce de Arboviroses — entry point Streamlit.
 
-Branch experimental/platform-app: interface DEPENDE do pacote `arboviral`,
-mas o pacote NÃO depende deste app. Verificação: nenhum arquivo em
-src/arboviral/ importa de app/.
+Regra arquitetural: a interface DEPENDE do pacote `arboviral`, mas o
+pacote NÃO depende deste app. Verificação: nenhum arquivo em
+src/arboviral/ importa de app/ (validar com grep antes de cada release).
 
 Roteamento via st.navigation (Streamlit ≥ 1.36): rótulos e ícones de cada
 tela são definidos aqui, não inferidos do nome do arquivo. Isso evita o

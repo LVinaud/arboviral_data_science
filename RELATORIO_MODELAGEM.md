@@ -269,6 +269,6 @@ Atualização em `src/arboviral/evaluation/explain.py`: nova função `explicaca
 
 Output uniforme entre os 3 métodos: DataFrame com colunas `feature, valor_observado, contribuicao, abs_contribuicao, sign, metodo`. A coluna `metodo` documenta qual técnica foi usada — útil para auditoria e para a UI exibir ao gestor.
 
-**Implicação**: a interface (app Streamlit em `experimental/platform-app`) consegue mostrar a justificativa do alerta para qualquer modelo do portfolio, não apenas árvores. Apenas os baselines (Persistência, Climatologia) seguem sem card de explicação por feature — fazem sentido pedagógico mas não usam features.
+**Implicação**: a interface (app Streamlit em `app/`) consegue mostrar a justificativa do alerta para qualquer modelo do portfolio, não apenas árvores. Apenas os baselines (Persistência, Climatologia) seguem sem card de explicação por feature — fazem sentido pedagógico mas não usam features.
 
 A função legada `shap_por_predicao()` foi mantida como alias retrocompat (renomeia `contribuicao` → `shap`, `abs_contribuicao` → `abs_shap`).
