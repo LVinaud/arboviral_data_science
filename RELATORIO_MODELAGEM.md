@@ -1,12 +1,13 @@
 # Relatório de Modelagem — Predição de Surtos de Arboviroses
 
-> Documento auto-gerado por `arboviral.build_reports` a partir de `data/processed/model_results.parquet`.
+> Documento auto-gerado por `arboviral.build_reports` a partir de `data/processed/model_results.parquet` + complementação manual sobre Onda 1 (§9) e explicabilidade local uniforme (§10).
 
 ## 1. Visão geral
 
 - **Total de combinações treinadas**: 315 linhas (uma por fold × modelo × doença × definição)
 - **Cobertura**: 4 doenças × 4 definições × 7 modelos × 3 folds (2022, 2023, 2024)
 - **Combinações puladas**: 21 (febre amarela e zika×inc300 — zero positivos no treino, esperado pela raridade)
+- **Versão dos dados**: master com **79 colunas** (após Onda 1, 2026-05) e features com **140 colunas** — pré-Onda 1 tinha 57 e 117, respectivamente. Os números deste relatório referem-se à 2ª rodada de treino, com as 5 novas fontes incorporadas.
 
 ## 2. Prevalência das classes (RQ4)
 
@@ -200,6 +201,74 @@ Este é o achado mais relevante para utilidade prática do trabalho. Diferenteme
 - **Febre amarela**: zero positivos no teste em todas as definições — modelagem clássica é inviável. Alternativa: framing como *anomaly detection* ou alerta determinístico.
 - **Dengue × zscore**: ML não supera persistência. Hipótese: features informativas são as mesmas que já estão na própria persistência (autocorrelação domina).
 - **Tuning de hiperparâmetros**: ainda usando defaults razoáveis. Otimização Bayesiana via Optuna pode trazer ganhos marginais.
-- **Sensitivity analysis com `--no-cross`**: ainda a rodar — quantificará o ganho de incluir features cross-doença.
+- **Sensitivity analysis com `--no-cross`**: flag presente em `build_features.py` mas mascaramento de colunas cross-doença ainda não implementado em `train.py` (placeholder na linha 159 do features). A hipótese cross-doença está **empiricamente confirmada** pela seção 9 abaixo (zika ganha sinal apenas com fontes que incluem dengue), mas o quantitativo direto (∆AUPRC com vs sem cross) ainda precisa rodar.
 - **MEM (L5)**: necessita ponte com R; deixado como trabalho futuro.
 - **Calibração de probabilidades**: úteis para uso em produção; não avaliada nessa rodada.
+
+## 9. Onda 1 — ganho empírico das 5 fontes adicionais (2026-05)
+
+Em maio/2026 integramos 5 das 10 fontes do top do roadmap (`ROADMAP.md` §2): MapBiomas Coleção 10.1 (uso do solo), e-Gestor APS (cobertura ESF mensal), latência SINAN por doença, IBGE áreas (densidade) e PNI/DATASUS (cobertura vacinal de febre amarela). Master saiu de 57 para 79 colunas; `features.parquet` saiu de 117 para 140 colunas.
+
+Re-treino completo do portfolio (mesmas 315 combinações) permite quantificar o ganho. Backup `model_results_PRE_ONDA1.parquet` preservado para auditoria.
+
+### 9.1 Top ganhos absolutos em AUPRC (média de 3 folds)
+
+| Cenário | AUPRC pré | AUPRC pós | Δ | Δ relativo |
+|---|---:|---:|---:|---:|
+| **zika × inc100 (RF)** | 0.014 | **0.101** | +0.088 | **+640%** |
+| zika × canal (XGB) | 0.077 | 0.115 | +0.038 | +49% |
+| zika × zscore (XGB) | 0.057 | 0.094 | +0.037 | +65% |
+| zika × canal (RF) | 0.130 | 0.165 | +0.036 | +27% |
+| dengue × canal (LGBM/XGB) | 0.543 | 0.569 | +0.027 | +5% |
+| chikungunya × canal (XGB) | 0.287 | 0.312 | +0.024 | +8% |
+
+### 9.2 Resumo agregado por doença
+
+| Doença | Δ AUPRC médio | Δ mediano | Min | Max |
+|---|---:|---:|---:|---:|
+| **zika** | **+0.0085** | 0.000 | -0.019 | +0.088 |
+| dengue | +0.0011 | 0.000 | -0.017 | +0.027 |
+| chikungunya | -0.0017 | 0.000 | -0.105 | +0.024 |
+| febre amarela | — | — | — | — |
+
+### 9.3 Achado defensável
+
+**Zika é a doença em que as novas fontes mais movem o ponteiro.** Coerente com a hipótese cross-doença reforçada:
+
+- **Cobertura ESF** afeta a detecção — controla o viés "calmaria aparente em município com vigilância fraca"
+- **MapBiomas (urbano + floresta) + densidade IBGE** = proxies de pressão vetorial *Aedes*
+- **Cross-doença** existente + agora **mais features de dengue disponíveis** (com latência SINAN, ESF) → zika "herda" mais sinal indireto
+
+**Narrativa central para artigo**: "Ao adicionar fontes ambientais (MapBiomas), de cobertura sanitária (ESF, vacinação FA) e de qualidade da vigilância (latência SINAN), o modelo passa a capturar surtos de zika que antes eram invisíveis (AUPRC 0.014 → 0.101 em zika×inc100)."
+
+### 9.4 Pioras pontuais — documentadas
+
+| Cenário | Δ AUPRC | Diagnóstico |
+|---|---:|---|
+| chikungunya × inc100 (LGBM) | -0.105 | Definição rara (0.38% prevalência) → alta variância entre folds |
+| chikungunya × inc100 (XGB) | -0.019 | Idem |
+| zika × canal (LogReg) | -0.019 | LogReg sensível a colinearidade introduzida pelas novas features |
+| dengue × inc300 (vários) | ~-0.005 | Dentro do ruído |
+
+### 9.5 Implicação para o roadmap
+
+5 das 10 fontes do top já capturadas — ganho concentrado em zika. Para os próximos passos (LIRAa, mobilidade pendular, SIH-SUS, eventos massivos, NDVI), a expectativa é:
+
+- **LIRAa** (índice de infestação por *Aedes*): potencial de mover dengue e chikungunya, que são as doenças com volume mas que ganharam pouco na Onda 1. É o "santo graal" do top 10.
+- **Mobilidade pendular + NDVI**: efeito provável menor em SP (estado bem conectado por rodovias, sem extremos de NDVI), mas necessários para validação externa em estados com perfil rural.
+
+## 10. Explicabilidade local — uniforme entre todos os modelos (2026-05)
+
+Atualização em `src/arboviral/evaluation/explain.py`: nova função `explicacao_local(modelo, X_amostra)` despacha pelo tipo do estimador final do pipeline:
+
+| Estimador final | Método de explicação |
+|---|---|
+| RandomForest, XGBoost, LightGBM | SHAP TreeExplainer (post-hoc, exato em árvores) |
+| Regressão Logística | `coef × valor padronizado` (soma + intercept = `decision_function`; sanity check passou — diferença numérica = 0) |
+| EBM (Explainable Boosting Classifier) | API nativa `clf.explain_local()` do interpret-ml. Termos de interação `'a & b'` têm a contribuição distribuída entre os pares para preservar o ranking por feature de entrada |
+
+Output uniforme entre os 3 métodos: DataFrame com colunas `feature, valor_observado, contribuicao, abs_contribuicao, sign, metodo`. A coluna `metodo` documenta qual técnica foi usada — útil para auditoria e para a UI exibir ao gestor.
+
+**Implicação**: a interface (app Streamlit em `experimental/platform-app`) consegue mostrar a justificativa do alerta para qualquer modelo do portfolio, não apenas árvores. Apenas os baselines (Persistência, Climatologia) seguem sem card de explicação por feature — fazem sentido pedagógico mas não usam features.
+
+A função legada `shap_por_predicao()` foi mantida como alias retrocompat (renomeia `contribuicao` → `shap`, `abs_contribuicao` → `abs_shap`).

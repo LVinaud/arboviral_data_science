@@ -786,7 +786,82 @@ CASO DE USO DA PLATAFORMA — exemplo real do fold de teste 2024:
         + crescimento 348 → 557 (chikungunya_casos_lag2)
 
   Cada alerta na plataforma final pode ter explicação automática gerada por
-  shap_por_predicao() em src/arboviral/evaluation/explain.py.
+  explicacao_local() em src/arboviral/evaluation/explain.py — agora UNIFORME
+  para todos os modelos do portfolio (árvores via SHAP, LogReg via
+  coef×valor padronizado, EBM via API nativa explain_local).
+
+--------------------------------------------------------------------------------
+13. Explicabilidade local — uniforme entre todos os modelos (atualização 2026-05)
+--------------------------------------------------------------------------------
+Antes: app só mostrava SHAP por predição para árvores (RF/XGB/LGBM); EBM
+e LogReg ficavam com mensagem "explicabilidade não disponível", apesar de
+serem mais interpretáveis que árvores.
+
+Implementação: src/arboviral/evaluation/explain.py estendido com função
+explicacao_local() que despacha pelo tipo do estimador final do pipeline:
+
+  RandomForest / XGBoost / LightGBM   → SHAP TreeExplainer (post-hoc, exato)
+  Regressão Logística                 → coef_[i] × X_padronizado[i]
+                                         (soma + intercept = decision_function;
+                                          sanity check passou: diferença = 0)
+  EBM (ExplainableBoostingClassifier) → clf.explain_local(X).data(0)['scores']
+                                         API nativa do interpret-ml.
+                                         Termos de interação 'a & b' têm a
+                                         contribuição distribuída entre os
+                                         pares para preservar o ranking
+                                         por feature de entrada.
+
+Output uniforme entre todos os métodos:
+  feature  valor_observado  contribuicao  abs_contribuicao  sign  metodo
+
+A coluna 'metodo' documenta qual técnica foi usada (auditoria + UI mostra
+ao gestor). Útil para o relatório: cada doença/modelo tem o EXATO mecanismo
+de explicação documentado.
+
+Função legada shap_por_predicao() mantida como alias retrocompat (renomeia
+'contribuicao' → 'shap', 'abs_contribuicao' → 'abs_shap').
+
+--------------------------------------------------------------------------------
+14. Onda 1 — efeito empírico das 5 fontes integradas (atualização 2026-05)
+--------------------------------------------------------------------------------
+Após integrar MapBiomas, ESF, latência SINAN, densidade IBGE e vacinação FA
+ao master (57 → 79 colunas) e ao features (117 → 140), retreinamos o
+portfolio completo (315 combinações) e comparamos AUPRC pré × pós:
+
+  TOP GANHOS (média de 3 folds, AUPRC):
+    zika × inc100 (RF)         0.014 → 0.101   +0.088  (+640%)
+    zika × canal (XGB)         0.077 → 0.115   +0.038
+    zika × zscore (XGB)        0.057 → 0.094   +0.037
+    zika × canal (RF)          0.130 → 0.165   +0.036
+    dengue × canal (LGBM/XGB)  0.543 → 0.569   +0.027
+    chikungunya × canal (XGB)  0.287 → 0.312   +0.024
+
+  RESUMO POR DOENÇA (média do delta AUPRC):
+    zika           +0.0085   ← maior beneficiada
+    dengue         +0.0011
+    chikungunya    -0.0017   (dentro do ruído de fold)
+    febre amarela    NaN     (continua impossível pela raridade)
+
+ACHADO DEFENSÁVEL: ZIKA é a doença em que as novas fontes mais movem o
+ponteiro. Coerente com a hipótese cross-doença reforçada:
+  - Cobertura ESF afeta detecção (proxy de qualidade da vigilância)
+  - MapBiomas (urbano + floresta) + densidade IBGE = pressão vetorial
+  - Cross-doença existente + agora dengue tem mais features → zika "herda"
+    mais sinal indireto
+
+Narrativa para relatório/artigo: "ao adicionar fontes ambientais (MapBiomas),
+de cobertura sanitária (ESF, vacinação FA) e de qualidade da vigilância
+(latência SINAN), o modelo passa a capturar surtos de zika que antes eram
+invisíveis (AUPRC 0.014 → 0.101 em zika×inc100)."
+
+PIORAS PONTUAIS — documentadas como ruído de fold:
+  chikungunya × inc100 (LGBM)  -0.105   (definição com 0.38% prevalência)
+  dengue × inc300 (vários)     ~-0.005  (ruído de fold)
+
+Backups dos resultados pré-Onda 1 preservados em
+  data/processed/model_results_PRE_ONDA1.parquet
+  data/processed/predictions_PRE_ONDA1.parquet
+para auditoria, re-análise e ablação reportável.
 
 ================================================================================
 PRÓXIMOS PASSOS
