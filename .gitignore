@@ -2,7 +2,12 @@ contexto/
 
 # data/raw/ contém arquivos binários grandes (DBC, XLSX até 275MB) incompatíveis
 # com o limite de 100MB do GitHub. Ver README para instruções de obtenção dos dados.
-data/raw/
+# Padrão data/raw/* (sem barra final) permite reincluir arquivos específicos via "!".
+data/raw/*
+# Exceções: documentação e manifest de integridade — versionados pra que o
+# repositório carregue as instruções de obtenção e o hash de cada raw.
+!data/raw/README.md
+!data/raw/MANIFEST.sha256
 
 # data/processed/ é gerada pelo build_master.py (derivada dos interim).
 data/processed/
