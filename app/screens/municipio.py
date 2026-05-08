@@ -353,8 +353,6 @@ else:
                     f'<div class="card">{rows_html}</div>',
                     unsafe_allow_html=True,
                 )
-                with st.expander("Ver tabela completa com valores observados"):
-                    st.dataframe(top, hide_index=True, use_container_width=True)
             except Exception as e:
                 st.error(f"Erro ao computar a explicação: {e}")
 
