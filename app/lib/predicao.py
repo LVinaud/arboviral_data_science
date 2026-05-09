@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from arboviral.evaluation.explain import explicacao_local
+from i18n import t
 
 
 def predicao_atual(modelo, features_municipio: pd.DataFrame) -> float:
@@ -35,13 +36,13 @@ def categorizar_risco(prob: float) -> tuple[str, str]:
     Thresholds alinhados ao design system (lib/tema.py): 0.25 / 0.50 / 0.75.
     """
     if prob >= 0.75:
-        return "Crítico", "🔴"
+        return t("categorizar_risco.critico"), "🔴"
     elif prob >= 0.50:
-        return "Alto", "🟠"
+        return t("categorizar_risco.alto"), "🟠"
     elif prob >= 0.25:
-        return "Moderado", "🟡"
+        return t("categorizar_risco.moderado"), "🟡"
     else:
-        return "Baixo", "🟢"
+        return t("categorizar_risco.baixo"), "🟢"
 
 
 # Defaults preferidos para os selectboxes do app — uso prático mostrou que

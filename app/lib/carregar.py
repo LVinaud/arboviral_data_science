@@ -7,6 +7,12 @@ Tudo é lido de `data/processed/` ou `data/lookup/` — outputs do pipeline.
 Funções decoradas com @st.cache_data são carregadas uma única vez por sessão
 do Streamlit, garantindo performance (re-carregar parquet de 12MB toda vez
 seria inviável).
+
+i18n: o decorator `show_spinner` aceita string ou bool, não callable. Para
+permitir spinners traduzidos sem perder o cache, desativamos `show_spinner`
+no decorator e abrimos `st.spinner(t(...))` dentro da função. Em caso de
+cache hit a função não roda — então o spinner só aparece no primeiro carregar
+(ou após invalidação), exatamente como antes.
 """
 from __future__ import annotations
 
@@ -17,44 +23,49 @@ import pandas as pd
 import streamlit as st
 
 from arboviral.io import LOOKUP, PROCESSED
+from i18n import t
 
 
-@st.cache_data(show_spinner="Carregando municípios...")
+@st.cache_data(show_spinner=False)
 def carregar_municipios() -> pd.DataFrame:
     """Lookup município → nome, lat, lon, estação INMET."""
-    df = pd.read_excel(LOOKUP / "municipios_sp_estacoes_inmet.xlsx", engine="calamine")
-    df = df.rename(columns={
-        "Código Município Completo": "cod_ibge",
-        "Nome_Município": "nome_municipio",
-        "LATITUDE": "lat",
-        "LONGITUDE": "lon",
-        "CD_ESTACAO": "estacao_inmet",
-        "NOME_ESTACAO": "nome_estacao",
-        "DIST_KM": "dist_estacao_km",
-    })
-    df["cod_ibge"] = df["cod_ibge"].astype(int)
+    with st.spinner(t("carregar.municipios")):
+        df = pd.read_excel(LOOKUP / "municipios_sp_estacoes_inmet.xlsx", engine="calamine")
+        df = df.rename(columns={
+            "Código Município Completo": "cod_ibge",
+            "Nome_Município": "nome_municipio",
+            "LATITUDE": "lat",
+            "LONGITUDE": "lon",
+            "CD_ESTACAO": "estacao_inmet",
+            "NOME_ESTACAO": "nome_estacao",
+            "DIST_KM": "dist_estacao_km",
+        })
+        df["cod_ibge"] = df["cod_ibge"].astype(int)
     return df
 
 
-@st.cache_data(show_spinner="Carregando dataset master...")
+@st.cache_data(show_spinner=False)
 def carregar_master() -> pd.DataFrame:
     """municipio_mes.parquet — dataset consolidado (645 mun × 11 anos × 12 meses)."""
-    return pd.read_parquet(PROCESSED / "municipio_mes.parquet")
+    with st.spinner(t("carregar.master")):
+        return pd.read_parquet(PROCESSED / "municipio_mes.parquet")
 
 
-@st.cache_data(show_spinner="Carregando rótulos de surto...")
+@st.cache_data(show_spinner=False)
 def carregar_labels() -> pd.DataFrame:
     """labels.parquet — 4 definições binárias de surto por doença."""
-    return pd.read_parquet(PROCESSED / "labels.parquet")
+    with st.spinner(t("carregar.labels")):
+        return pd.read_parquet(PROCESSED / "labels.parquet")
 
 
-@st.cache_data(show_spinner="Carregando features...")
+@st.cache_data(show_spinner=False)
 def carregar_features() -> pd.DataFrame:
     """features.parquet — input para os modelos (~140 colunas após Onda 1, sem leakage)."""
-    return pd.read_parquet(PROCESSED / "features.parquet")
+    with st.spinner(t("carregar.features")):
+        return pd.read_parquet(PROCESSED / "features.parquet")
 
 
-@st.cache_data(show_spinner="Carregando histórico de predições...")
+@st.cache_data(show_spinner=False)
 def carregar_predicoes() -> pd.DataFrame:
     """predictions.parquet — predições de TODOS os modelos em todos os folds.
 
@@ -66,13 +77,14 @@ def carregar_predicoes() -> pd.DataFrame:
     o alerta de fato corresponde — caso contrário fold=2024 começaria em
     Dez/2023 (features que predizem Jan/2024).
     """
-    df = pd.read_parquet(PROCESSED / "predictions.parquet")
-    df["target_ano"] = df["ano"] + (df["mes"] == 12).astype(int)
-    df["target_mes"] = (df["mes"] % 12) + 1
+    with st.spinner(t("carregar.predicoes")):
+        df = pd.read_parquet(PROCESSED / "predictions.parquet")
+        df["target_ano"] = df["ano"] + (df["mes"] == 12).astype(int)
+        df["target_mes"] = (df["mes"] % 12) + 1
     return df
 
 
-@st.cache_resource(show_spinner="Carregando modelos treinados...")
+@st.cache_resource(show_spinner=False)
 def carregar_modelo(doenca: str, definicao: str, nome_modelo: str, fold: int):
     """Carrega um modelo serializado específico.
 
@@ -82,7 +94,8 @@ def carregar_modelo(doenca: str, definicao: str, nome_modelo: str, fold: int):
     arquivo = PROCESSED / "models" / f"{doenca}_{definicao}_{nome_modelo}_{fold}.joblib"
     if not arquivo.exists():
         return None
-    return joblib.load(arquivo)
+    with st.spinner(t("carregar.modelos")):
+        return joblib.load(arquivo)
 
 
 def listar_modelos_disponiveis() -> list[dict]:

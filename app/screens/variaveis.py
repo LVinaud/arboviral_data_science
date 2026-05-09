@@ -9,10 +9,16 @@ estatísticas básicas. Permite busca por nome e filtro por categoria.
   - auditoria (revisor confere quais features o modelo viu de fato)
   - apresentação ao orientador (panorama do dataset)
   - depuração (encontrar uma feature específica e ver sua distribuição)
+
+i18n: o cache de `_construir_catalogo` recebe `lang` como argumento — quando
+o usuário troca de idioma, o catálogo inteiro é re-humanizado (categorias,
+fontes, tipos, descrição de cada feature). Sem o argumento `lang`, o cache
+preservaria os labels do idioma antigo.
 """
 import pandas as pd
 import streamlit as st
 
+from i18n import get_language, t
 from lib.carregar import carregar_features
 from lib.labels import humanizar_feature
 from lib.tema import (
@@ -22,37 +28,42 @@ from lib.tema import (
     section_label,
 )
 
-# Categoria → (label, prefixos que casam, fonte primária)
+# Cada categoria conhecida → (chave de label i18n, prefixos, chave de fonte i18n).
 # Ordem importa: a primeira que casa ganha. Mais específicas primeiro.
 _CATEGORIAS: list[tuple[str, list[str], str]] = [
-    ("Epidemiológicas — Dengue", ["dengue_"], "SINAN / DATASUS"),
-    ("Epidemiológicas — Zika", ["zika_"], "SINAN / DATASUS"),
-    ("Epidemiológicas — Chikungunya", ["chikungunya_"], "SINAN / DATASUS"),
-    ("Epidemiológicas — Febre amarela", ["febre_amarela_", "febre_"], "SVS / Ministério da Saúde"),
-    ("Climáticas", ["temp_", "precip_", "umid_", "pressao_", "vento_"], "NASA POWER (MERRA-2)"),
-    ("Sazonalidade", ["mes_sin", "mes_cos"], "engenharia de features (calendário)"),
-    ("Geolocalização", ["lat", "lon", "dist_estacao_km"], "lookup IBGE / INMET"),
-    ("Demografia / Economia", ["populacao_estimada", "pib_", "gini", "idhm"], "IBGE SIDRA / Atlas PNUD"),
-    ("Densidade territorial", ["area_km2", "densidade_"], "IBGE — áreas territoriais"),
-    ("Cobertura terrestre", ["pct_"], "MapBiomas Coleção 10.1"),
-    ("Saúde pública", ["leitos_", "mortalidade_"], "DATASUS — CNES + SIM"),
-    ("Cobertura ESF / APS", ["esf_"], "e-Gestor / Ministério da Saúde"),
-    ("Saneamento", ["iag", "ies"], "SINISA"),
-    ("Vacinação", ["cob_vac_"], "PNI / DATASUS"),
-    ("Vigilância municipal (MUNIC)", ["msau"], "IBGE MUNIC 2018"),
-    ("Desastres / risco ambiental", ["mgrd", "mmam"], "IBGE MUNIC 2020"),
-    ("Habitação / favelas", ["num_aglom_", "pop_aglom_", "num_favelas", "pop_favelas"], "IBGE — Censos 2010 / 2022"),
-    ("CAPAG", ["capag_"], "Tesouro Nacional"),
-    ("Metadata de predição", ["target_"], "engenharia de features (split)"),
+    ("epi_dengue", ["dengue_"], "sinan"),
+    ("epi_zika", ["zika_"], "sinan"),
+    ("epi_chik", ["chikungunya_"], "sinan"),
+    ("epi_fa", ["febre_amarela_", "febre_"], "svs"),
+    ("climaticas", ["temp_", "precip_", "umid_", "pressao_", "vento_"], "nasa_power"),
+    ("sazonalidade", ["mes_sin", "mes_cos"], "calendario"),
+    ("geo", ["lat", "lon", "dist_estacao_km"], "ibge_inmet"),
+    ("demo_econ", ["populacao_estimada", "pib_", "gini", "idhm"], "ibge_atlas"),
+    ("densidade", ["area_km2", "densidade_"], "ibge_areas"),
+    ("cobertura", ["pct_"], "mapbiomas"),
+    ("saude_publica", ["leitos_", "mortalidade_"], "datasus_cnes"),
+    ("esf_aps", ["esf_"], "egestor"),
+    ("saneamento", ["iag", "ies"], "sinisa"),
+    ("vacinacao", ["cob_vac_"], "pni"),
+    ("munic", ["msau"], "ibge_munic_2018"),
+    ("desastres", ["mgrd", "mmam"], "ibge_munic_2020"),
+    ("habitacao", ["num_aglom_", "pop_aglom_", "num_favelas", "pop_favelas"], "ibge_censos"),
+    ("capag", ["capag_"], "tesouro"),
+    ("predicao_meta", ["target_"], "split_features"),
 ]
 
 _CHAVES = {"cod_ibge", "ano", "mes"}
 
 
-@st.cache_data(show_spinner="Catalogando variáveis...")
-def _construir_catalogo() -> pd.DataFrame:
-    """Itera sobre todas as colunas de features.parquet e monta o catálogo."""
-    features = carregar_features()
+@st.cache_data(show_spinner=False)
+def _construir_catalogo(lang: str) -> pd.DataFrame:
+    """Itera sobre todas as colunas de features.parquet e monta o catálogo.
+
+    O argumento `lang` (idioma corrente) entra na chave de cache para que
+    a troca PT↔EN invalide o catálogo e re-humanize todas as descrições.
+    """
+    with st.spinner(t("carregar.catalogando")):
+        features = carregar_features()
     cols = [c for c in features.columns if c not in _CHAVES]
 
     rows: list[dict] = []
@@ -67,38 +78,39 @@ def _construir_catalogo() -> pd.DataFrame:
         unicos_nao_nan = set(s.dropna().unique())
         eh_bool_disfarcado = unicos_nao_nan and unicos_nao_nan.issubset({True, False, 0, 1})
         if pd.api.types.is_bool_dtype(s) or eh_bool_disfarcado:
-            tipo = "booleana"
+            tipo = t("variaveis.tipos.booleana")
             mn, mx, media = None, None, None
-            # eq(True) trata NaN como nao-True automaticamente, sem warning de
-            # downcasting do pandas (fillna+astype emite FutureWarning).
             n_true = int(s.eq(True).sum())
             n_false = (n_total - n_nan) - n_true
-            extra = f"{n_true:,} verdadeiros / {n_false:,} falsos".replace(",", ".")
+            extra = (
+                f"{n_true:,} {t('comum.verdadeiros')} / "
+                f"{n_false:,} {t('comum.falsos')}"
+            ).replace(",", ".")
         elif pd.api.types.is_numeric_dtype(s):
-            tipo = "numérica"
+            tipo = t("variaveis.tipos.numerica")
             valores = s.dropna()
             mn = float(valores.min()) if not valores.empty else None
             mx = float(valores.max()) if not valores.empty else None
             media = float(valores.mean()) if not valores.empty else None
             extra = ""
         else:
-            tipo = "categórica"
+            tipo = t("variaveis.tipos.categorica")
             mn, mx, media = None, None, None
             unicos = s.dropna().astype(str).unique()
             extra = ", ".join(sorted(unicos)[:5]) + (" …" if len(unicos) > 5 else "")
 
-        cat_nome, fonte = "Outras", "—"
-        for nome, prefixos, origem in _CATEGORIAS:
+        cat_chave, fonte_chave = "outras", "indef"
+        for chave_cat, prefixos, chave_fonte in _CATEGORIAS:
             if any(c.startswith(p) or c == p for p in prefixos):
-                cat_nome, fonte = nome, origem
+                cat_chave, fonte_chave = chave_cat, chave_fonte
                 break
 
         rows.append({
-            "categoria": cat_nome,
+            "categoria": t(f"variaveis.categorias.{cat_chave}"),
             "tecnico": c,
             "humano": humanizar_feature(c),
             "tipo": tipo,
-            "fonte": fonte,
+            "fonte": t(f"variaveis.fontes.{fonte_chave}"),
             "nan_pct": round(nan_pct, 2),
             "min": mn,
             "media": media,
@@ -109,17 +121,13 @@ def _construir_catalogo() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-catalogo = _construir_catalogo()
+catalogo = _construir_catalogo(get_language())
 
 # --- Header ---
 page_header(
-    titulo="Catálogo de variáveis",
-    descricao=(
-        f"Todas as **{len(catalogo)} features** que entram nos modelos, com nome técnico, "
-        "descrição em português, fonte de origem, tipo e estatísticas. "
-        "Útil para auditoria do que o modelo realmente vê e para checar lacunas (NaN%)."
-    ),
-    crumbs="PLATAFORMA / VARIÁVEIS",
+    titulo=t("variaveis.titulo"),
+    descricao=t("variaveis.descricao", n_features=len(catalogo)),
+    crumbs=t("variaveis.crumbs"),
 )
 
 # --- Métricas no topo ---
@@ -129,41 +137,41 @@ n_quase_completas = int((catalogo["nan_pct"] < 1).sum())
 n_com_buraco = int((catalogo["nan_pct"] >= 10).sum())
 
 metric_row(
-    metric("Features totais", f"{len(catalogo)}",
-           delta=f"em {n_categorias} categorias temáticas"),
-    metric("Quase completas", f"{n_quase_completas}",
-           delta="< 1% de NaN"),
-    metric("Com lacunas relevantes", f"{n_com_buraco}",
-           delta="≥ 10% de NaN — atenção"),
-    metric("NaN médio", f"{nan_medio:.1f}%",
-           delta="média sobre todas as features"),
+    metric(t("variaveis.metricas.total_label"), f"{len(catalogo)}",
+           delta=t("variaveis.metricas.total_delta", n_categorias=n_categorias)),
+    metric(t("variaveis.metricas.completas_label"), f"{n_quase_completas}",
+           delta=t("variaveis.metricas.completas_delta")),
+    metric(t("variaveis.metricas.lacunas_label"), f"{n_com_buraco}",
+           delta=t("variaveis.metricas.lacunas_delta")),
+    metric(t("variaveis.metricas.nan_medio_label"), f"{nan_medio:.1f}%",
+           delta=t("variaveis.metricas.nan_medio_delta")),
 )
 
 st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
 
 # --- Filtros ---
-st.markdown(section_label("Filtros"), unsafe_allow_html=True)
+st.markdown(section_label(t("variaveis.filtros.secao")), unsafe_allow_html=True)
 col_busca, col_cat, col_tipo = st.columns([2, 2, 1])
 
 with col_busca:
     busca = st.text_input(
-        "Buscar (nome técnico ou descrição)",
-        placeholder="ex.: temp, dengue_lag, esf, vigilância…",
-        help="Busca substring case-insensitive em ambos os nomes.",
+        t("variaveis.filtros.busca_label"),
+        placeholder=t("variaveis.filtros.busca_placeholder"),
+        help=t("variaveis.filtros.busca_help"),
     )
 
 with col_cat:
     categorias_disp = sorted(catalogo["categoria"].unique())
     cat_sel = st.multiselect(
-        "Categorias", categorias_disp, default=[],
-        help="Vazio = todas. Selecione uma ou mais para filtrar.",
+        t("variaveis.filtros.categorias_label"), categorias_disp, default=[],
+        help=t("variaveis.filtros.categorias_help"),
     )
 
 with col_tipo:
     tipos_disp = sorted(catalogo["tipo"].unique())
     tipo_sel = st.multiselect(
-        "Tipo", tipos_disp, default=[],
-        help="Vazio = todos.",
+        t("variaveis.filtros.tipo_label"), tipos_disp, default=[],
+        help=t("variaveis.filtros.tipo_help"),
     )
 
 # --- Aplicar filtros ---
@@ -180,10 +188,11 @@ if tipo_sel:
     df = df[df["tipo"].isin(tipo_sel)]
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-st.caption(
-    f"Mostrando **{len(df)} de {len(catalogo)}** features "
-    f"(em {df['categoria'].nunique()} categorias)."
-)
+st.caption(t(
+    "variaveis.tabela.info_filtro",
+    n_filtrado=len(df), n_total=len(catalogo),
+    n_categorias=df["categoria"].nunique(),
+))
 
 # --- Tabela ---
 st.dataframe(
@@ -191,25 +200,25 @@ st.dataframe(
     use_container_width=True,
     hide_index=True,
     column_config={
-        "categoria": st.column_config.TextColumn("Categoria", width="medium"),
-        "tecnico": st.column_config.TextColumn("Nome técnico", width="medium"),
-        "humano": st.column_config.TextColumn("Descrição"),
-        "tipo": st.column_config.TextColumn("Tipo", width="small"),
-        "fonte": st.column_config.TextColumn("Fonte", width="medium"),
+        "categoria": st.column_config.TextColumn(t("comum.categoria"), width="medium"),
+        "tecnico": st.column_config.TextColumn(t("comum.nome_tecnico"), width="medium"),
+        "humano": st.column_config.TextColumn(t("comum.descricao")),
+        "tipo": st.column_config.TextColumn(t("comum.tipo"), width="small"),
+        "fonte": st.column_config.TextColumn(t("comum.fonte"), width="medium"),
         "nan_pct": st.column_config.NumberColumn(
-            "% NaN", format="%.1f%%", width="small",
+            t("comum.pct_nan"), format="%.1f%%", width="small",
         ),
-        "min": st.column_config.NumberColumn("Mínimo", format="%.3g", width="small"),
-        "media": st.column_config.NumberColumn("Média", format="%.3g", width="small"),
-        "max": st.column_config.NumberColumn("Máximo", format="%.3g", width="small"),
-        "extra": st.column_config.TextColumn("Observação", width="medium"),
+        "min": st.column_config.NumberColumn(t("comum.minimo"), format="%.3g", width="small"),
+        "media": st.column_config.NumberColumn(t("comum.media"), format="%.3g", width="small"),
+        "max": st.column_config.NumberColumn(t("comum.maximo"), format="%.3g", width="small"),
+        "extra": st.column_config.TextColumn(t("comum.observacao"), width="medium"),
     },
     height=620,
 )
 
 # --- Distribuição por categoria ---
 st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
-st.markdown(section_label("Distribuição por categoria"), unsafe_allow_html=True)
+st.markdown(section_label(t("variaveis.tabela.secao_distribuicao")), unsafe_allow_html=True)
 resumo = (
     catalogo.groupby("categoria")
     .agg(
@@ -226,10 +235,10 @@ st.dataframe(
     use_container_width=True,
     hide_index=True,
     column_config={
-        "categoria": "Categoria",
-        "n_features": st.column_config.NumberColumn("Nº de features"),
-        "nan_medio_pct": st.column_config.NumberColumn("% NaN médio", format="%.1f%%"),
-        "fonte": "Fonte primária",
+        "categoria": t("comum.categoria"),
+        "n_features": st.column_config.NumberColumn(t("comum.n_features")),
+        "nan_medio_pct": st.column_config.NumberColumn(t("comum.pct_nan_medio"), format="%.1f%%"),
+        "fonte": t("comum.fonte_primaria"),
     },
 )
 
@@ -237,9 +246,4 @@ st.markdown(
     '<hr style="border:none;border-top:1px solid var(--c-line);margin:24px 0 12px">',
     unsafe_allow_html=True,
 )
-st.caption(
-    "As colunas `cod_ibge`, `ano` e `mes` não aparecem aqui — são chaves de "
-    "identificação, não features de entrada do modelo. As colunas `target_year` "
-    "e `target_month` são derivadas no `train.py` para o split temporal e "
-    "também entram como features (sazonalidade do mês predito)."
-)
+st.caption(t("variaveis.tabela.rodape"))

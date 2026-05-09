@@ -7,6 +7,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from i18n import t
 from lib.tema import (
     nav_card,
     page_header,
@@ -14,18 +15,15 @@ from lib.tema import (
 )
 
 page_header(
-    titulo="Sobre o projeto",
-    descricao=(
-        "Plano de evolução da pesquisa — desde o fechamento da IC até material "
-        "publicável em artigo internacional. Conteúdo reflete o ROADMAP.md do repositório."
-    ),
-    crumbs="PLATAFORMA / SOBRE",
+    titulo=t("sobre.titulo"),
+    descricao=t("sobre.descricao"),
+    crumbs=t("sobre.crumbs"),
 )
 
 ROADMAP_PATH = Path(__file__).resolve().parents[2] / "ROADMAP.md"
 
 if not ROADMAP_PATH.exists():
-    st.error(f"`ROADMAP.md` não encontrado em `{ROADMAP_PATH}`.")
+    st.error(t("erro.roadmap_ausente", caminho=ROADMAP_PATH))
     st.stop()
 
 texto = ROADMAP_PATH.read_text(encoding="utf-8")
@@ -44,35 +42,32 @@ def _extrair_secao(md: str, marcador_inicio: str, marcador_fim: str | None) -> s
 
 
 # --- 3 cards-resumo dos horizontes ---
-st.markdown(section_label("Em resumo"), unsafe_allow_html=True)
+st.markdown(section_label(t("sobre.secao_resumo")), unsafe_allow_html=True)
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(nav_card(
-        "C", "Curto prazo",
-        "5 itens para fechar a IC bem feita: análises post-hoc, SHAP "
-        "estratificado, robustez a NaN, sensitivity analysis (--no-cross), tuning.",
+        "C", t("sobre.card_curto_titulo"), t("sobre.card_curto_desc"),
     ), unsafe_allow_html=True)
 with c2:
     st.markdown(nav_card(
-        "M", "Médio prazo",
-        "Top 10 fontes de dados priorizadas por impacto. 5/10 já integradas "
-        "(MapBiomas, ESF, latência SINAN, densidade, vacinação FA).",
+        "M", t("sobre.card_medio_titulo"), t("sobre.card_medio_desc"),
     ), unsafe_allow_html=True)
 with c3:
     st.markdown(nav_card(
-        "L", "Longo prazo",
-        "Caminho para publicação: workshop nacional → conferência IEEE → "
-        "journal internacional. Validação externa em outros estados é o passo crítico.",
+        "L", t("sobre.card_longo_titulo"), t("sobre.card_longo_desc"),
     ), unsafe_allow_html=True)
 
 st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
 
 # --- Tabs com cada horizonte ---
+# Os marcadores ## 1./## 2./## 3. são marcadores estáveis no ROADMAP.md
+# (o conteúdo das tabs sai do .md em PT-BR — tradução do roadmap em si fica
+# para uma fase futura, junto com a do paper).
 tab_curto, tab_medio, tab_longo, tab_full = st.tabs([
-    "Curto prazo",
-    "Médio prazo (top 10 fontes)",
-    "Longo prazo (artigo)",
-    "Documento completo",
+    t("sobre.tab_curto"),
+    t("sobre.tab_medio"),
+    t("sobre.tab_longo"),
+    t("sobre.tab_full"),
 ])
 
 with tab_curto:
@@ -97,10 +92,7 @@ with tab_longo:
     )
 
 with tab_full:
-    st.caption(
-        "Mesmo conteúdo das tabs anteriores, em formato linear "
-        "(útil para imprimir ou copiar)."
-    )
+    st.caption(t("sobre.tab_full_caption"))
     st.markdown(texto)
 
 st.markdown(
@@ -109,11 +101,9 @@ st.markdown(
 )
 st.markdown(
     '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--c-muted)">'
-    '<span>Conteúdo vive em <code>ROADMAP.md</code> no repositório · '
-    'atualizações refletem aqui automaticamente.</span>'
+    f'<span>{t("sobre.rodape")}</span>'
     '<a href="https://github.com/LVinaud/arboviral_data_science" '
     'style="color:var(--c-accent)">github.com/LVinaud/arboviral_data_science</a>'
     '</div>',
     unsafe_allow_html=True,
 )
-

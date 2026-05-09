@@ -223,7 +223,7 @@ A narrativa para o relatório/artigo é forte: **ao adicionar fontes ambientais 
 1. **Sensitivity analysis com `--no-cross`**: quantificar o ganho de incluir features cross-doença (mascaramento ainda placeholder em `train.py`)
 2. **Hyperparameter tuning** com Optuna (atual usa defaults)
 3. **Calibração de probabilidades** (importante para uso em produção)
-4. **Plataforma**: interface integrada à inteli.gente, exibindo top features para cada alerta. App Streamlit funcional em `app/` — design system completo, 7 telas (Visão geral, Alertas, Município, Mapa, Comparativo, Variáveis, Sobre), explicabilidade local para todos os modelos do portfolio (não apenas árvores).
+4. **Plataforma**: interface integrada à inteli.gente, exibindo top features para cada alerta. App Streamlit funcional em `app/` — design system completo, 7 telas (Visão geral, Alertas, Município, Mapa, Comparativo, Variáveis, Sobre), interface bilíngue PT/EN (toggle no topo da sidebar; ver [`app/i18n/README.md`](app/i18n/README.md)), explicabilidade local para todos os modelos do portfolio (não apenas árvores).
 5. **5 fontes restantes do top 10**: LIRAa (prioridade #1 — único do top 3 ainda pendente), mobilidade pendular, SIH-SUS, eventos massivos, NDVI.
 6. Trabalho futuro: MEM (L5) via ponte R, framing alternativo para FA (anomaly detection).
 

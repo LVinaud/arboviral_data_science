@@ -13,7 +13,7 @@ para gestores municipais.
 
 ```
 app/
-├── app.py                          # entry point — st.navigation registra as 6 telas,
+├── app.py                          # entry point — st.navigation registra as 7 telas,
 │                                   #               aplica tema e renderiza chrome (sidebar)
 ├── screens/
 │   ├── visao_geral.py              # hero institucional + métricas + cards de navegação
@@ -21,13 +21,19 @@ app/
 │   ├── municipio.py                # detalhe + explicação local por município
 │   ├── mapa.py                     # mapa de SP por nível de risco (scatter_mapbox)
 │   ├── comparativo.py              # 4 doenças lado a lado (heatmap + série histórica)
+│   ├── variaveis.py                # catálogo das 140 features (categoria, fonte, NaN%)
 │   └── sobre.py                    # roadmap do projeto e plano de publicação
 ├── lib/
 │   ├── carregar.py                 # loaders cacheados de dados/modelos
 │   ├── predicao.py                 # wrappers (categorizar_risco, justificar_alerta)
 │   ├── tema.py                     # design system: aplica CSS, helpers HTML
 │   └── labels.py                   # humanização de códigos técnicos (rf, inc100, dengue,
-│                                   #   pct_floresta, dengue_casos_lag1) → strings em PT-BR
+│                                   #   pct_floresta, dengue_casos_lag1) → strings PT/EN
+├── i18n/                           # camada bilíngue PT-BR / EN — só UI, core fica em PT
+│   ├── pt.py / en.py               # dicionários (376 chaves em paridade)
+│   ├── __init__.py                 # API: t(), language_selector(), set_language()
+│   ├── _validar.py                 # checa paridade de chaves entre pt.py e en.py
+│   └── README.md                   # quando traduzir, como adicionar idioma, convenções
 ├── static/
 │   └── styles.css                  # tokens + componentes do design system
 └── README.md                       # este arquivo
@@ -128,6 +134,25 @@ sutil). Implementação:
   então `aplicar_tema()` é chamado a cada render (o texto do CSS em si é
   cacheado em RAM via `@st.cache_data`). Sem isso, o estilo "sumia" ao
   trocar de aba.
+
+## Internacionalização (PT / EN)
+
+A UI é bilíngue desde 2026-05-08. Toda string visível ao usuário passa por
+`t("chave.dotted")` que resolve no dicionário do idioma corrente
+(`app/i18n/pt.py` ou `en.py`). O seletor PT/EN fica no topo da sidebar.
+
+> **Apenas a UI é traduzida.** O core (`src/arboviral/`, parquets, configs,
+> docstrings do pipeline) permanece em PT-BR — é vocabulário epidemiológico
+> brasileiro e a referência canônica para o paper. Detalhes em
+> [`app/i18n/README.md`](i18n/README.md).
+
+```python
+from i18n import t
+st.title(t("alertas.titulo"))
+st.caption(t("home.metricas.periodo_delta", ano_min=2014, ano_max=2024))
+```
+
+**Validar paridade de chaves**: `python -m i18n._validar` (a partir de `app/`).
 
 ## Humanização de códigos técnicos (`lib/labels.py`)
 

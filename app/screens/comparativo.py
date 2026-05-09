@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from i18n import t
 from lib.carregar import carregar_master, carregar_municipios, carregar_predicoes
 from lib.labels import nome_definicao, nome_doenca, nome_mes, nome_modelo
 from lib.predicao import DEFAULT_DEFINICAO, DEFAULT_MODELO, idx_default
@@ -21,44 +22,46 @@ preds = carregar_predicoes()
 master = carregar_master()
 
 with st.sidebar:
-    st.markdown("### Seleção")
+    st.markdown(f"### {t('comum.selecao')}")
     nomes = sorted(municipios["nome_municipio"].tolist())
     nome_sel = st.selectbox(
-        "Município", nomes,
+        t("comum.municipio"), nomes,
         index=nomes.index("São Paulo") if "São Paulo" in nomes else 0,
     )
     cod = int(municipios[municipios["nome_municipio"] == nome_sel]["cod_ibge"].iloc[0])
 
     definicoes_disp = sorted(preds["definicao"].unique())
     definicao = st.selectbox(
-        "Definição de surto", definicoes_disp,
+        t("comum.definicao_surto"), definicoes_disp,
         index=idx_default(definicoes_disp, DEFAULT_DEFINICAO),
         format_func=nome_definicao,
     )
     modelos_disp = sorted(preds[preds["definicao"] == definicao]["modelo"].unique())
     modelo = st.selectbox(
-        "Modelo", modelos_disp,
+        t("comum.modelo"), modelos_disp,
         index=idx_default(modelos_disp, DEFAULT_MODELO),
         format_func=nome_modelo,
     )
     fold = st.selectbox(
-        "Ano de teste", sorted(preds["fold_ano_teste"].unique()),
+        t("comum.ano_teste"), sorted(preds["fold_ano_teste"].unique()),
         index=len(preds["fold_ano_teste"].unique()) - 1,
     )
 
 # --- Header ---
 page_header(
-    titulo=f"{nome_sel} · 4 doenças lado a lado",
-    descricao=(
-        f"Heatmap de probabilidades + histórico de casos para todas as arboviroses "
-        f"em {fold} · {nome_definicao(definicao)} · {nome_modelo(modelo)}."
+    titulo=t("comparativo.titulo", municipio=nome_sel),
+    descricao=t(
+        "comparativo.descricao",
+        fold=fold,
+        definicao=nome_definicao(definicao),
+        modelo=nome_modelo(modelo),
     ),
-    crumbs=f"PLATAFORMA / COMPARATIVO / {nome_sel.upper()}",
+    crumbs=t("comparativo.crumbs", nome_upper=nome_sel.upper()),
 )
 st.markdown(
     " ".join([
         chip(f"IBGE {cod}", "mono"),
-        chip(f"Ano de teste {fold}"),
+        chip(t("comparativo.chips.ano_teste", fold=fold)),
         chip(nome_definicao(definicao)),
     ]),
     unsafe_allow_html=True,
@@ -73,12 +76,12 @@ df = preds[
     & (preds["fold_ano_teste"] == fold)
 ].copy()
 
-st.markdown(section_label("Probabilidade prevista por mês × doença"), unsafe_allow_html=True)
+st.markdown(section_label(t("comparativo.secao_heatmap")), unsafe_allow_html=True)
 st.markdown(risk_legend(), unsafe_allow_html=True)
 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
 if df.empty:
-    st.warning("Sem dados para essa combinação.")
+    st.warning(t("erro.sem_dados_combinacao"))
 else:
     # Pivota pelo mês PREDITO — para fold=2024 isso dá Jan→Dez/2024 alinhado
     # com o ano de teste, em vez de Dez/2023→Nov/2024 (mês das features).
@@ -107,8 +110,8 @@ else:
         colorbar=dict(title="Prob.", tickformat=".0%"),
     ))
     fig.update_layout(
-        xaxis=dict(title="Mês predito"),
-        yaxis=dict(title="Doença"),
+        xaxis=dict(title=t("comparativo.x_axis_mes_predito")),
+        yaxis=dict(title=t("comparativo.y_axis_doenca")),
         height=380,
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
@@ -119,7 +122,7 @@ else:
 
 # --- Histórico das 4 doenças ---
 st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
-st.markdown(section_label("Histórico de casos — 11 anos, todas as doenças"),
+st.markdown(section_label(t("comparativo.secao_historico")),
             unsafe_allow_html=True)
 
 hist = master[master["cod_ibge"] == cod].copy()
@@ -147,8 +150,8 @@ for d in doencas:
             line=dict(color=cores[d], width=1.6),
         ))
 fig_h.update_layout(
-    xaxis=dict(title="Mês", gridcolor="#e2e8f0"),
-    yaxis=dict(title="Casos notificados", gridcolor="#e2e8f0"),
+    xaxis=dict(title=t("comum.mes"), gridcolor="#e2e8f0"),
+    yaxis=dict(title=t("comparativo.y_axis_casos"), gridcolor="#e2e8f0"),
     height=360,
     legend=dict(orientation="h", y=-0.18),
     plot_bgcolor="#ffffff",
@@ -162,9 +165,4 @@ st.markdown(
     '<hr style="border:none;border-top:1px solid var(--c-line);margin:24px 0 12px">',
     unsafe_allow_html=True,
 )
-st.caption(
-    "As 4 doenças compartilham o vetor *Aedes aegypti* (dengue, zika, chikungunya) "
-    "ou são silvestres (febre amarela, transmitida por Haemagogus/Sabethes). "
-    "Surtos podem coincidir ou se distribuir conforme condições ambientais."
-)
-
+st.caption(t("comparativo.rodape"))

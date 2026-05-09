@@ -7,6 +7,7 @@ trocar por choropleth com geojson dos limites municipais.
 import plotly.express as px
 import streamlit as st
 
+from i18n import t
 from lib.carregar import carregar_municipios, carregar_predicoes
 from lib.labels import (
     ano_mes_humano,
@@ -33,16 +34,16 @@ preds = carregar_predicoes()
 
 # --- Sidebar ---
 with st.sidebar:
-    st.markdown("### Filtros")
+    st.markdown(f"### {t('comum.filtros')}")
     doencas_disp = sorted(preds["doenca"].unique())
     doenca = st.selectbox(
-        "Doença", doencas_disp,
+        t("comum.doenca"), doencas_disp,
         index=idx_default(doencas_disp, DEFAULT_DOENCA),
         format_func=nome_doenca,
     )
     definicoes_disp = sorted(preds[preds["doenca"] == doenca]["definicao"].unique())
     definicao = st.selectbox(
-        "Definição de surto", definicoes_disp,
+        t("comum.definicao_surto"), definicoes_disp,
         index=idx_default(definicoes_disp, DEFAULT_DEFINICAO),
         format_func=nome_definicao,
     )
@@ -50,13 +51,13 @@ with st.sidebar:
         preds[(preds["doenca"] == doenca) & (preds["definicao"] == definicao)]["modelo"].unique()
     )
     modelo = st.selectbox(
-        "Modelo", modelos,
+        t("comum.modelo"), modelos,
         index=idx_default(modelos, DEFAULT_MODELO),
         format_func=nome_modelo,
     )
     folds_disp = sorted(preds["fold_ano_teste"].unique())
     fold = st.selectbox(
-        "Ano de teste", folds_disp,
+        t("comum.ano_teste"), folds_disp,
         index=len(folds_disp) - 1,
     )
 
@@ -65,10 +66,10 @@ with st.sidebar:
               & (preds["modelo"] == modelo) & (preds["fold_ano_teste"] == fold)]["target_mes"].unique()
     )
     mes = st.selectbox(
-        "Mês predito", meses_disp,
+        t("comum.mes_predito"), meses_disp,
         index=len(meses_disp) // 2,
         format_func=nome_mes,
-        help="Mês para o qual o mapa mostra a probabilidade prevista (alvo do alerta).",
+        help=t("mapa.mes_help"),
     )
 
 # --- Filtrar predições ---
@@ -86,28 +87,35 @@ df = df.merge(
 )
 
 # --- Header ---
+mes_humano = ano_mes_humano(fold, mes)
 page_header(
-    titulo="Mapa de risco — São Paulo",
-    descricao=(
-        f"Probabilidade prevista de surto em {ano_mes_humano(fold, mes)} para "
-        f"{nome_doenca(doenca)} · {nome_definicao(definicao)} · {nome_modelo(modelo)}. "
-        "Cada ponto = 1 município. Cor indica nível de risco."
+    titulo=t("mapa.titulo"),
+    descricao=t(
+        "mapa.descricao",
+        mes_humano=mes_humano,
+        doenca=nome_doenca(doenca),
+        definicao=nome_definicao(definicao),
+        modelo=nome_modelo(modelo),
     ),
-    crumbs=f"PLATAFORMA / MAPA / {nome_doenca(doenca).upper()} / "
-           f"{ano_mes_humano(fold, mes).upper()}",
+    crumbs=t(
+        "mapa.crumbs",
+        doenca_upper=nome_doenca(doenca).upper(),
+        mes_upper=mes_humano.upper(),
+    ),
 )
 
 # --- Métricas ---
 metric_row(
-    metric("Municípios mapeados", f"{len(df):,}"),
-    metric("Críticos",
+    metric(t("mapa.metricas.mapeados_label"), f"{len(df):,}"),
+    metric(t("comum.criticos"),
            f"{int((df['prob_predita'] >= 0.75).sum()):,}",
-           delta="≥ 75% prob."),
-    metric("Altos",
+           delta=t("mapa.metricas.criticos_delta")),
+    metric(t("comum.altos"),
            f"{int(((df['prob_predita'] >= 0.50) & (df['prob_predita'] < 0.75)).sum()):,}",
-           delta="50% a 75%"),
-    metric("Risco médio", f"{df['prob_predita'].mean():.0%}",
-           delta="média estadual"),
+           delta=t("mapa.metricas.altos_delta")),
+    metric(t("mapa.metricas.risco_medio_label"),
+           f"{df['prob_predita'].mean():.0%}",
+           delta=t("mapa.metricas.risco_medio_delta")),
 )
 
 st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
@@ -152,11 +160,11 @@ st.plotly_chart(fig, use_container_width=True)
 top5 = df.nlargest(5, "prob_predita")[["nome_municipio", "cod_ibge", "prob_predita", "y_true"]].copy()
 if not top5.empty:
     top5["prob_pct"] = top5["prob_predita"] * 100
-    top5["surto_real"] = top5["y_true"].map({1: "Sim", 0: "Não"})
+    top5["surto_real"] = top5["y_true"].map({1: t("comum.sim"), 0: t("comum.nao")})
     top5 = top5[["nome_municipio", "cod_ibge", "prob_pct", "surto_real"]]
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     st.markdown(
-        '<div class="card-section-label">Top 5 municípios em maior risco</div>',
+        f'<div class="card-section-label">{t("mapa.top5.secao")}</div>',
         unsafe_allow_html=True,
     )
     st.dataframe(
@@ -164,12 +172,15 @@ if not top5.empty:
         use_container_width=True,
         hide_index=True,
         column_config={
-            "nome_municipio": "Município",
-            "cod_ibge": st.column_config.TextColumn("Código IBGE", width="small"),
+            "nome_municipio": t("comum.municipio"),
+            "cod_ibge": st.column_config.TextColumn(t("comum.codigo_ibge"), width="small"),
             "prob_pct": st.column_config.ProgressColumn(
-                "Probabilidade", min_value=0, max_value=100, format="%.0f%%",
+                t("comum.probabilidade"),
+                min_value=0, max_value=100, format="%.0f%%",
             ),
-            "surto_real": st.column_config.TextColumn("Surto real?", width="small"),
+            "surto_real": st.column_config.TextColumn(
+                t("mapa.top5.surto_real"), width="small",
+            ),
         },
     )
 
@@ -177,9 +188,4 @@ st.markdown(
     '<hr style="border:none;border-top:1px solid var(--c-line);margin:32px 0 12px">',
     unsafe_allow_html=True,
 )
-st.caption(
-    "Mapa interativo: clique e arraste para mover, scroll para zoom, "
-    "passe o mouse sobre um ponto para ver detalhes. "
-    "Versão futura: choropleth com geojson dos limites municipais."
-)
-
+st.caption(t("mapa.rodape"))

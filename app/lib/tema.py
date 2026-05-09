@@ -14,6 +14,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from i18n import t
+
 _STATIC = Path(__file__).resolve().parent.parent / "static"
 _GEIST = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
@@ -51,8 +53,8 @@ def sidebar_brand() -> None:
         st.markdown(
             '<div class="brand">'
             '<div class="brand-mark">A</div>'
-            '<div class="brand-text">Alerta Precoce'
-            '<small>Arboviroses · SP</small></div>'
+            f'<div class="brand-text">{t("tema.brand_titulo")}'
+            f'<small>{t("tema.brand_sub")}</small></div>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -63,9 +65,9 @@ def sidebar_footer() -> None:
     with st.sidebar:
         st.markdown(
             '<div class="sidebar-foot">'
-            'ICMC · USP São Carlos<br>'
-            'Iniciação Científica<br>'
-            'Lázaro Vinaud — 2025/26'
+            f'{t("tema.footer_linha1")}<br>'
+            f'{t("tema.footer_linha2")}<br>'
+            f'{t("tema.footer_linha3")}'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -73,9 +75,11 @@ def sidebar_footer() -> None:
 
 # ---------- Helpers de cor / nível ----------
 
-# Thresholds alinhados ao mockup (4 níveis a 0.25 / 0.50 / 0.75)
+# Thresholds alinhados ao mockup (4 níveis a 0.25 / 0.50 / 0.75).
+# O slug CSS continua em PT-BR (preserva contrato com static/styles.css);
+# só o label exibido vem do i18n.
 _NIVEIS = [
-    (0.75, "critico", "CRÍTICO", "#dc2626"),
+    (0.75, "critico", "CRITICO", "#dc2626"),
     (0.50, "alto", "ALTO", "#ea580c"),
     (0.25, "moderado", "MODERADO", "#a16207"),
     (0.00, "baixo", "BAIXO", "#15803d"),
@@ -83,11 +87,11 @@ _NIVEIS = [
 
 
 def nivel_de(prob: float) -> tuple[str, str, str]:
-    """Retorna (slug_css, label, cor_hex) para uma probabilidade [0, 1]."""
-    for limiar, slug, label, cor in _NIVEIS:
+    """Retorna (slug_css, label_i18n, cor_hex) para uma probabilidade [0, 1]."""
+    for limiar, slug, chave_label, cor in _NIVEIS:
         if prob >= limiar:
-            return slug, label, cor
-    return "baixo", "BAIXO", "#15803d"
+            return slug, t(f"risco.{chave_label}"), cor
+    return "baixo", t("risco.BAIXO"), "#15803d"
 
 
 def cor_por_prob(prob: float) -> str:
@@ -198,10 +202,10 @@ def chip(texto: str, variante: str = "") -> str:
 def risk_legend() -> str:
     """Legenda horizontal dos 4 níveis (BAIXO → CRÍTICO)."""
     items = [
-        ("BAIXO", "#15803d", "#f0fdf4"),
-        ("MODERADO", "#a16207", "#fefce8"),
-        ("ALTO", "#ea580c", "#fff7ed"),
-        ("CRÍTICO", "#dc2626", "#fef2f2"),
+        (t("risco.BAIXO"), "#15803d", "#f0fdf4"),
+        (t("risco.MODERADO"), "#a16207", "#fefce8"),
+        (t("risco.ALTO"), "#ea580c", "#fff7ed"),
+        (t("risco.CRITICO"), "#dc2626", "#fef2f2"),
     ]
     steps = "".join(
         f'<div class="risk-legend-step" style="background:{bg};color:{cor}">{rot}</div>'
