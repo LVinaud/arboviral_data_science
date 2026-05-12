@@ -936,6 +936,179 @@ para auditoria, re-análise e ablação reportável.
 
 ---
 
+## 15. Mobilidade pendular intermunicipal (Censo 2010 + 2022) — adicionada em 2026-05-12
+
+### Por que esta fonte
+
+Hipótese científica: arboviroses se espalham geograficamente pelo movimento humano. Município pequeno que recebe muitos pendulares de uma região endêmica herda risco que o histórico próprio de casos não captura. Era item **#6 do top 10** do roadmap; foi atacada logo após Onda 1 (LIRAa permanece pausado aguardando LAI à CCD-SP).
+
+### Duas vintages combinadas
+
+A integração usa **duas vintages oficiais** do IBGE de forma complementar:
+
+| Vintage | Fonte | Cobertura | Variáveis derivadas |
+|---|---|---|---|
+| Censo **2010** — microdados da amostra | <https://ftp.ibge.gov.br/Censos/Censo_Demografico_2010/Resultados_Gerais_da_Amostra/Microdados/> | anos 2015–2021 do master | `pendulares_entram_trabalho`, `pendulares_saem_trabalho` |
+| Censo **2022** — SIDRA tabela 10329 | <https://sidra.ibge.gov.br/tabela/10329> (API REST) | anos 2022–2025 do master | apenas `pendulares_saem_trabalho` (entram fica **NaN**) |
+
+A escolha das vintages se baseia na referência temporal de cada fonte. Não fazemos forward-fill cego: os anos pós-2022 recebem o snapshot 2022, recompondo a temporalidade real do fenômeno.
+
+#### Vintage 2010 — matriz O-D via microdados
+
+Arquivos baixados em `data/raw/mobilidade_pendular/`:
+- `SP1.zip` (130 MB) — interior e capital fora da RM
+- `SP2_RM.zip` (64 MB) — Região Metropolitana
+- `Documentacao.zip` (10 MB) — layout fixed-width (aba PESS)
+
+Reconstrução da **matriz origem-destino ponderada** entre os 645 municípios paulistas, a partir de 3.651.181 registros de pessoa após filtro UF=35. Mantemos somente registros com `V0660 == 3` ("trabalha em outro município") e destino dentro dos 645 SP — fluxo inter-UF e flag "país estrangeiro / mais de um município" descartados (genéricos demais para virarem feature limpa).
+
+A partir da matriz O-D, projetamos para duas marginais:
+
+| Coluna | Definição operacional |
+|---|---|
+| `pendulares_entram_trabalho` | Σ peso amostral de pessoas residentes em ≠ X que trabalham em X (soma da coluna de destino X na matriz) |
+| `pendulares_saem_trabalho` | Σ peso amostral de pessoas residentes em X que trabalham em ≠ X (soma da linha de origem X na matriz) |
+
+**Validação metodológica do peso amostral**: o layout PESS define V0010 com INT=3 + DEC=13, ou seja, peso é um inteiro de 16 dígitos representando o valor real com 13 decimais implícitos (faixa típica 1–500; média ~10 reflete a amostragem ~10% do Censo). A soma dos pesos sobre todos os 3,65 milhões de registros bate com a população oficial SP 2010 (~41,26 milhões), confirmando a interpretação correta. Documentado também como comentário no código.
+
+#### Vintage 2022 — SIDRA tabela 10329 (apenas saídas)
+
+A **tabela 10329 do Censo 2022** (liberada em 9/out/2025) traz "Pessoas de 10 anos ou mais ocupadas... por local de exercício do trabalho principal", em nível municipal. Pegamos a categoria **C469 = 12188 ("Outro município")** com totais nos demais classificadores (sexo, classes de rendimento, retorno semanal), via API REST:
+
+```
+GET https://servicodados.ibge.gov.br/api/v3/agregados/10329/periodos/2022/
+    variaveis/13373?localidades=N6[N3[35]]
+    &classificacao=469[12188]|2[6794]|386[9680]|2087[79177]
+```
+
+Resultado salvo em `data/raw/mobilidade_pendular/sidra_10329_saidas_2022.json` (~77 KB). Cobertura: 645/645 municípios SP, sem suprimidos por sigilo. Por que apenas saídas? Porque a tabela agrega por município de **residência** — não desagrega o destino. Microdados 2022 do IBGE ainda não estavam públicos em 12/mai/2026; sem eles, não há como reconstruir entradas para 2022.
+
+### Por que `entram` fica NaN em 2022+ (e não copiamos o valor de 2010)
+
+Decisão metodológica explícita: a série temporal deve respeitar a **referência de cada vintage**. Em 2022 não temos medida direta de entradas, então registramos NaN — o modelo trata ausência como informação. Preencher com 2010 seria mascarar a temporalidade e induzir o modelo a interpretar "valor estável" como observação fresca.
+
+### Por que apenas trabalho e não estudo
+
+Pendulares para estudo concentram universitários e secundaristas. Para vetor adulto de arboviroses, trabalho é o canal demograficamente mais relevante. Estudo permaneceria como feature derivada de menor poder preditivo e maior custo cognitivo para gestor entender. Decidimos não complicar e manter trabalho como única dimensão por enquanto.
+
+### Sanity check dos valores
+
+Top receptores na saída do parser fazem sentido geograficamente:
+
+| Cod IBGE | Município | Entram 2010 | Saem 2010 | Saem 2022 | Δ saídas | Perfil |
+|---|---|---:|---:|---:|---:|---|
+| 3550308 | São Paulo capital | 899.708 | 155.256 | 149.070 | −6.186 | polo de empregos |
+| 3547809 | Santo André | 75.579 | 122.608 | 113.299 | −9.309 | RMSP misto |
+| 3518800 | Guarulhos | 50.411 | 113.131 | 91.279 | −21.852 | dormitório + aeroporto |
+| 3534401 | Osasco | 57.155 | 110.771 | 107.063 | −3.708 | dormitório clássico |
+| 3548708 | São Bernardo do Campo | 103.645 | 107.866 | 90.967 | −16.899 | RMSP misto |
+| 3513801 | Carapicuíba | 41.022 | 72.199 | 66.457 | −5.742 | dormitório puro |
+
+**Achado da comparação 2010 vs 2022**: quase todas as cidades-dormitório da RMSP tiveram queda nas saídas — efeito esperado do home office pós-pandemia. Guarulhos perdeu ~22 mil pendulares, Suzano ~19 mil, São Bernardo ~17 mil. A única do top 10 que cresceu foi Caieiras (+6.398). Esses ∆ não viram feature por si só, mas justificam metodologicamente a necessidade de manter as duas vintages distintas.
+
+Cobertura no master: 100% para `saem` em todos os anos; 100% para `entram` nos anos 2015–2021 (vintage 2010); NaN para `entram` nos anos 2022–2025 (vintage 2022 não tem destino).
+
+### Limitações documentadas
+
+1. **Vintage 2010 cobre 7 anos do master, vintage 2022 cobre 4 anos** — descontinuidade implícita na transição 2021→2022. O modelo verá um salto que reflete a mudança real de comportamento pós-pandemia + mudança de metodologia. Considerar interagir com flag binário "ano ≥ 2022" se a descontinuidade afetar o modelo.
+2. **`pendulares_entram_trabalho` ausente em 2022+** — limitação conhecida da SIDRA 10329. Será resolvida quando IBGE liberar microdados 2022.
+3. **Apenas dimensão trabalho** — estudo, lazer e turismo não estão modelados.
+4. **Apenas pendular intra-SP** — destinos em outras UFs descartados (efeito local em Paraíba do Sul, Mogi Guaçu fronteira MG etc. fica oculto).
+5. **Peso amostral é estimativa** — Censo 2010 entrevistou ~10% da população; pesos calibram para o total, mas há erro amostral residual em municípios pequenos.
+
+### Plano para atualizar quando IBGE liberar microdados Censo 2022
+
+1. Estender `scraping/mobilidade_pendular.py` para baixar também os microdados 2022 (URLs análogas em `/Censos/Censo_Demografico_2022/Resultados_Gerais_da_Amostra/Microdados/`).
+2. Estender `ingestion/mobilidade_pendular.py` com função `build_2022_microdados()` que reconstrói matriz O-D completa — formato e layout das variáveis-chave V0660/V6604 devem se manter (verificar via `Layout_microdados_Amostra.xls` da nova documentação).
+3. Atualizar `build()` para usar a matriz O-D 2022 para anos ≥ 2022, preenchendo a coluna `pendulares_entram_trabalho` que hoje está NaN.
+4. Re-treinar portfólio e reportar Δ AUPRC.
+
+---
+
+## 16. Internações por arbovirose pelo SUS (SIH-SUS) — adicionada em 2026-05-12
+
+### Por que esta fonte
+
+Hipótese: internações pelo SUS são proxy de **severidade** da arbovirose em um município–mês, complementando os dados do SINAN. SINAN registra a notificação ao sistema de vigilância (incluindo casos leves); SIH-SUS registra a internação efetiva, ou seja, o subconjunto grave que precisou de leito hospitalar. Além disso, captura residentes paulistas internados em outros estados (centros de referência) — informação ausente no SINAN, que agrega por município de residência mas exige notificação local.
+
+Era item **#7 do top 10** do roadmap, atacado logo após mobilidade pendular.
+
+### Fonte e formato
+
+| Atributo | Valor |
+|---|---|
+| Fonte | DATASUS — SIH-SUS, AIH-RD (Autorização de Internação Hospitalar — Reduzida) |
+| URL canônica | <ftp://ftp.datasus.gov.br/dissemin/publicos/SIHSUS/200801_/Dados/> |
+| Padrão de arquivo | `RDSP{AAMM}.dbc` — um arquivo por mês, formato DBC (DataSUS comprimido) |
+| Janela coletada | janeiro/2015 a dezembro/2025 — 132 arquivos, ~2 GB total |
+| Tamanho típico | 12–18 MB por mês |
+| Data de coleta | 2026-05-12 |
+
+### Como o AIH-RD mapeia para o master
+
+Cada linha do AIH-RD é uma internação hospitalar com 113 campos. Filtramos apenas os 4 campos necessários:
+
+| Campo AIH-RD | Uso | Observação |
+|---|---|---|
+| `MUNIC_RES` | Município de residência do paciente | 6 dígitos DATASUS, convertido para 7 via lookup `municipios_sp_estacoes_inmet.xlsx` (mesmo lookup do SINAN) |
+| `DT_INTER` | Data de internação | String AAAAMMDD, define ano/mês da agregação no master |
+| `DIAG_PRINC` | CID-10 do diagnóstico principal | 3-4 chars, com padding por espaço |
+| `MORTE` | Falecimento durante internação | Coletado mas não usado por enquanto |
+
+### Classificação CID-10 → doença
+
+| CID-10 | Doença derivada | Notas |
+|---|---|---|
+| A90 | dengue | dengue clássico |
+| A91 | dengue | dengue grave / hemorrágico — somado ao dengue clássico para a feature `sih_internacoes_dengue` |
+| A92.0 | chikungunya | código específico desde 2014 |
+| A92.5 | zika | código próprio criado pela OMS em 2016 e adotado no Brasil em 2017 |
+| A92.8 | zika | "outras febres por arbovírus específicas" — código usado pelos hospitais nos surtos 2015–2016 antes da existência do A92.5; mantido para não perder o histórico inicial |
+| A95* | febre_amarela | qualquer subcategoria (silvestre ou urbana) |
+
+Não filtramos por gravidade do CID dentro da família (A90 leve vs A91 grave) — qualquer internação pelo SUS já indica severidade suficiente para justificar leito hospitalar.
+
+### Colunas adicionadas ao master
+
+Quatro contagens mensais, uma por doença:
+
+| Coluna | Definição operacional |
+|---|---|
+| `sih_internacoes_dengue` | nº de internações pelo SUS com CID A90/A91 no município-mês (residência) |
+| `sih_internacoes_chikungunya` | nº de internações pelo SUS com CID A92.0 |
+| `sih_internacoes_zika` | nº de internações pelo SUS com CID A92.5 ou A92.8 |
+| `sih_internacoes_febre_amarela` | nº de internações pelo SUS com CID A95* |
+
+Zero não significa NaN — significa que não houve internação por aquela doença naquele município-mês. Espera-se zero majoritário para zika (próximo) e febre amarela (raríssimo, normalmente confinado a surtos pontuais).
+
+### Diferença prática vs `internacoes` do SINAN
+
+A coluna `internacoes` já presente no master vem do campo `HOSPITALIZ == '1'` do SINAN (apenas dengue e chikungunya, zika não tem). O SIH-SUS adiciona:
+
+1. **Cobertura mais completa de internação**: SINAN depende da notificação compulsória + preenchimento do campo HOSPITALIZ pelo notificador; muita internação real não aparece como tal no SINAN porque a ficha não foi atualizada após o paciente piorar.
+2. **Inclui residentes SP internados fora de SP**: SINAN agrega no município de notificação; SIH-SUS agrega no município de residência mesmo quando o leito ficou em outro estado.
+3. **Inclui zika e febre amarela**: SINAN para zika não tem campo HOSPITALIZ; SIH-SUS captura.
+
+### Sanity check dos valores
+
+Janela 2015–2025 (132 arquivos): contagens totais por doença batem com a literatura epidemiológica brasileira — dengue domina (centenas de milhares de internações ao longo da década), chikungunya na faixa de milhares, zika nas dezenas (rede severa pouco comum), febre amarela raríssima (poucos casos isolados).
+
+Top picos esperados: São Paulo capital em abr–mai/2024 (auge da maior epidemia de dengue do estado).
+
+### Limitações documentadas
+
+1. **Apenas SUS** — internações privadas ficam fora. Em SP isso é particularmente relevante porque há cobertura de plano de saúde acima da média nacional. Subestimativa sistemática nos municípios de maior renda.
+2. **Apenas casos graves** — arbovirose leve não interna; a feature está correlacionada com casos mas é deslocada para a cauda direita da gravidade.
+3. **CID-10 do principal** — não conta arbovirose como diagnóstico secundário (paciente internado por outra causa + dengue concomitante).
+4. **Defasagem de processamento DATASUS** — ~60 dias entre a internação e a publicação no FTP. Para o mês corrente em produção, esperar 2 meses de "encheção" do dado.
+5. **A92.8 também captura outras arboviroses raras** (Mayaro, etc.). Em SP isso é desprezível mas há ruído residual.
+
+### Como usar a feature no modelo (recomendação)
+
+`sih_internacoes_*` em t é uma **medida retrospectiva** (registra o que aconteceu no mês). Para virar feature preditiva de surto em t+1, usar com defasagem (lag 1, 2 ou 3 meses) e/ou médias móveis — segue a convenção das demais features do master, gerada por `src/arboviral/features/build_features.py`. Não substituir `internacoes` do SINAN, e sim coexistir como sinal complementar.
+
+---
+
 # Próximos passos
 
 1. **Sensitivity analysis com `--no-cross`**: quantificar o ganho de incluir features cross-doença. (Hipótese: ganho substancial para zika; menor para dengue.)

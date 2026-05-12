@@ -53,7 +53,13 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 
 **Total**: dataset de 57 → **79 colunas** (+22 do master) e features de 117 → **140** (+23). Re-treino completo (315 combinações = 4 doenças × 4 definições × 7 modelos × ~3 folds) confirmou ganho relevante em zika (RF inc100: AUPRC 0.014 → 0.101 = **+640%**) e ganho moderado em dengue/chikungunya (~+0.02 a +0.03 nos top modelos). Detalhes em `RELATORIO_MODELAGEM.md` §3-4.
 
-**Ainda pendentes** (5 itens, em ordem de prioridade revisada): 1 (LIRAa), 6 (mobilidade pendular), 7 (SIH-SUS), 8 (eventos massivos), 10 (NDVI).
+**Ainda pendentes** (3 itens, em ordem de prioridade revisada): 1 (LIRAa, aguardando LAI à CCD-SP), 8 (eventos massivos), 10 (NDVI).
+
+**Onda 2 em andamento (2026-05-12)**:
+- #6 mobilidade pendular ✅ — 2 colunas em série temporal combinando vintages Censo 2010 (microdados, matriz O-D completa) e Censo 2022 (SIDRA tabela 10329, apenas saídas). `pendulares_entram_trabalho` em 2015–2021 + NaN em 2022–2025; `pendulares_saem_trabalho` cobre toda a série 2015–2025. Detalhes em AUDITORIA_DADOS.md §15.
+- #7 SIH-SUS internações ✅ — 4 colunas mensais a partir das AIH-RD do DATASUS (132 arquivos `RDSP{AAMM}.dbc`, ~2 GB), classificadas por CID-10 do diagnóstico principal: dengue (A90+A91), chikungunya (A92.0), zika (A92.5+A92.8) e febre amarela (A95*). Detalhes em AUDITORIA_DADOS.md §16.
+
+Master: 79 → 85 colunas (+2 mobilidade, +4 SIH-SUS).
 
 ### 🥇 Top 3 — Maior impacto esperado
 
@@ -104,19 +110,31 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
   - Zika: 4 dias
   - Chikungunya: 7 dias (doença menos lembrada, notificação mais lenta)
 
-#### 6. **Mobilidade pendular intermunicipal**
-- **O que adiciona**: matriz origem-destino de deslocamentos (estudo, trabalho).
-- **Por que importa**: surtos se espalham por movimento humano. Município que recebe muitos pendulares de área endêmica tem risco maior.
-- **Onde obter**:
-  - IBGE Censo 2010 e 2022 (deslocamento pendular)
-  - Google Mobility Reports (Covid, descontinuado mas histórico disponível)
-- **Esforço**: 3-5 dias (matriz é grande; precisa agregar features tipo "% de pendulares vindo de áreas com surto")
+#### 6. **Mobilidade pendular intermunicipal** ✅ CONCLUÍDO (2026-05-12)
+- **O que adiciona**: 2 colunas em série temporal — `pendulares_entram_trabalho` e `pendulares_saem_trabalho`.
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/mobilidade_pendular.py` — microdados Censo 2010 (SP1.zip + SP2_RM.zip, ~200 MB) + SIDRA tabela 10329 do Censo 2022 (API REST, JSON ~77 KB)
+  - Parsing: `src/arboviral/ingestion/mobilidade_pendular.py` — reconstrói matriz O-D do 2010 (fixed-width PESS, ~3,65 milhões de registros) e lê o JSON SIDRA 2022; combina em série anual
+- **Fontes**:
+  - IBGE Censo Demográfico 2010 — Microdados da Amostra <https://ftp.ibge.gov.br/Censos/Censo_Demografico_2010/Resultados_Gerais_da_Amostra/Microdados/>
+  - IBGE Censo Demográfico 2022 — SIDRA tabela 10329 <https://sidra.ibge.gov.br/tabela/10329> (variável 13373, C469=12188 "Outro município")
+- **Estratégia temporal**:
+  - Anos 2015–2021 → vintage 2010 (ambas as colunas preenchidas via matriz O-D)
+  - Anos 2022–2025 → vintage 2022 (apenas `pendulares_saem_trabalho`; `entram` fica NaN porque SIDRA não desagrega destino)
+- **Cobertura**: 100% para `saem` em todos os anos; 100% para `entram` em 2015–2021. NaN em `entram` para 2022–2025 — decisão metodológica explícita, preferimos honestidade temporal a forward-fill enganoso.
+- **Validação**: soma dos pesos amostrais 2010 bate com pop SP (~41,26 milhões). Comparação 2010 vs 2022 mostra queda das saídas em quase todas as cidades-dormitório (Guarulhos −22k, Suzano −19k, SBC −17k) — efeito coerente com o home office pós-pandemia. Detalhes em [AUDITORIA_DADOS.md §15](AUDITORIA_DADOS.md).
+- **Upgrade futuro**: quando IBGE liberar microdados do Censo 2022, reconstruir matriz O-D 2022 e preencher `pendulares_entram_trabalho` no intervalo 2022–2025.
 
-#### 7. **Dados de internação por arboviroses (SIH-SUS)**
-- **O que adiciona**: contagem de internações pelo SIH-SUS (Sistema de Informações Hospitalares), CID-10 A90/A91/A92.
-- **Por que importa**: já temos `internacoes` do SINAN, mas SIH-SUS é mais completo (inclui internações de cidadãos do estado SP em outros estados).
-- **Onde obter**: DATASUS FTP — `/dissemin/publicos/SIHSUS/200801_/Dados/`
-- **Esforço**: 3 dias (similar ao SINAN — DBC, lookup, agregação)
+#### 7. **Dados de internação por arboviroses (SIH-SUS)** ✅ CONCLUÍDO (2026-05-12)
+- **O que adiciona**: 4 colunas mensais — `sih_internacoes_{dengue,chikungunya,zika,febre_amarela}` —, contagens de internação hospitalar pelo SUS classificadas pelo CID-10 do diagnóstico principal (A90+A91, A92.0, A92.5+A92.8, A95*).
+- **Implementado em**:
+  - Coleta: `src/arboviral/scraping/sih_sus.py` (132 arquivos `RDSP{AAMM}.dbc` do FTP DATASUS, ~2 GB)
+  - Parsing: `src/arboviral/ingestion/sih_sus.py` (DBC → DBF via `pyreaddbc`, streaming registro a registro filtrando CIDs e UF de residência, lookup IBGE 6→7 dígitos reaproveitado do SINAN)
+- **Fonte**: DATASUS — SIH-SUS, AIH-RD (Autorização de Internação Hospitalar reduzida) <ftp://ftp.datasus.gov.br/dissemin/publicos/SIHSUS/200801_/Dados/>
+- **Cobertura**: 132 arquivos × 11 anos × 12 meses. Inclui residentes paulistas internados em outros estados (busca por tratamento em centros de referência), o que o SINAN não captura.
+- **Diferença sobre SINAN**: SINAN registra notificação (vigilância); SIH-SUS registra internação efetiva (severidade). Coexistem como sinais complementares, não substituem.
+- **Validação prévia**: piloto com 24 arquivos (apenas 2024) registrou 45.427 internações por dengue, pico de 2.034 em SP capital em mai/2024 — coerente com a maior epidemia do estado. Detalhes em [AUDITORIA_DADOS.md §16](AUDITORIA_DADOS.md).
+- **Limitação documentada**: cobertura apenas SUS (sem plano privado), o que subestima em municípios de maior renda.
 
 ### 🥉 Top 8-10 — Impacto complementar
 

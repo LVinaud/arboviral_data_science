@@ -7,9 +7,10 @@ Grade: 645 municípios SP × 2015–2025 × 12 meses = 85.140 linhas
 
 Fontes e estratégia de join:
   mensal  (cod_ibge, ano, mes): sinan_dengue, sinan_zika, sinan_chikungunya,
-                                 febre_amarela, nasa_power, saude
+                                 febre_amarela, nasa_power, saude, sih_sus
   anual   (cod_ibge, ano):      ibge, socioeconomico, sinisa
   estática (cod_ibge):          munic, habitacao, densidade
+  anual    (cod_ibge, ano):     ..., mobilidade_pendular (vintages 2010 + 2022)
   lookup  (cod_ibge):           nome, lat, lon, estação INMET
 
 Decisões metodológicas:
@@ -160,6 +161,26 @@ def build() -> pd.DataFrame:
         pd.read_parquet(INTERIM / "vacinacao_fa.parquet"),
         on=["cod_ibge", "ano"], how="left",
     )
+
+    print("  Juntando mobilidade pendular (Censo 2010 + Censo 2022 SIDRA)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "mobilidade_pendular.parquet"),
+        on=["cod_ibge", "ano"], how="left",
+    )
+
+    print("  Juntando SIH-SUS (internações hospitalares por arbovirose)...", flush=True)
+    df = df.merge(
+        pd.read_parquet(INTERIM / "sih_sus.parquet"),
+        on=["cod_ibge", "ano", "mes"], how="left",
+    )
+
+    # SIH-SUS: NaN no merge significa "nenhuma internação por aquela doença naquele
+    # município-mês", não "dado ausente". Preencher com 0 para que o modelo trate
+    # corretamente como sinal observado.
+    print("  Preenchendo zeros em SIH-SUS (NaN = sem internação registrada)...", flush=True)
+    cols_sih = [c for c in df.columns if c.startswith("sih_internacoes_")]
+    for c in cols_sih:
+        df[c] = df[c].fillna(0).astype("int32")
 
     # Ordenação canônica antes do forward-fill (importante para o ffill respeitar a ordem)
     df = df.sort_values(["cod_ibge", "ano", "mes"]).reset_index(drop=True)

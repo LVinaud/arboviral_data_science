@@ -38,8 +38,9 @@ Não fazem parsing nem agregação — essa é responsabilidade de
 | MapBiomas — uso do solo | `mapbiomas.py` | 2026-05 | `data/raw/mapbiomas/MAPBIOMAS_COVERAGE_COL_10_1.xlsx` | `ingestion/mapbiomas.py` | ✅ |
 | Cobertura ESF (e-Gestor APS) | `esf_coverage.py` | 2026-05 | `data/raw/esf/cobertura_<ab\|aps>_<YYYYMM>.json` (132 arquivos) | `ingestion/esf.py` | ✅ |
 | Vacinação FA (DATASUS PNI) | `pni_febre_amarela.py` | 2026-05 (manual) | `data/raw/febre_amarela/COB_VAC_FA.csv` | `ingestion/vacinacao_fa.py` | ✅ |
-| LIRAa (SES-SP) | `liraa_sp.py` | — | — | — | ⏳ |
-| SIH-SUS (internações) | `sih_arboviroses.py` | — | — | — | ⏳ |
+| Mobilidade pendular (Censo 2010 microdados + Censo 2022 SIDRA 10329) | `mobilidade_pendular.py` | 2026-05-12 | `data/raw/mobilidade_pendular/{SP1,SP2_RM,Documentacao}.zip` (~204 MB) + `sidra_10329_saidas_2022.json` (~77 KB) | `ingestion/mobilidade_pendular.py` | ✅ |
+| SIH-SUS (AIH-RD, internações por arbovirose) | `sih_sus.py` | 2026-05-12 | `data/raw/sih_sus/RDSP{AAMM}.dbc` (132 arquivos, ~2 GB) | `ingestion/sih_sus.py` | ✅ |
+| LIRAa (SES-SP / CCD-SP) | `liraa_sp.py` | — | — | — | ⏳ (aguardando LAI à CCD-SP, ver `scripts/lai_pedido_ccd_sp.md`) |
 | Latência SINAN (subnotificação) | (recálculo) | 2026-05 | reusa DBC do SINAN | atualização em `ingestion/sinan.py` | ✅ |
 
 ## Como rodar

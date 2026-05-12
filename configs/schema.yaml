@@ -198,3 +198,63 @@ urbanizacao:
   periodicidade: anual
   variaveis:
     iap0001_vias_pavimentadas_pct: {tipo: float, descricao: "parcela de vias públicas pavimentadas — área urbana (%)"}
+
+mobilidade_pendular:
+  fonte: ibge_censo_2010_microdados + ibge_censo_2022_sidra_10329
+  periodicidade: anual (dois snapshots, vintages 2010 e 2022)
+  observacao: |
+    Fluxo pendular intermunicipal para trabalho, combinando duas vintages
+    oficiais do IBGE em uma série temporal:
+      • Anos 2015–2021 → snapshot do Censo 2010, reconstruído via matriz
+        origem-destino a partir dos microdados da amostra.
+        URL: https://ftp.ibge.gov.br/Censos/Censo_Demografico_2010/Resultados_Gerais_da_Amostra/Microdados/
+        Variáveis PESS: V0001 (UF), V0002 (município residência), V0010
+        (peso amostral, INT=3 DEC=13), V0660 (local trabalho), V6604
+        (município trabalho). Filtragem: V0660 == 3 (trabalha em outro
+        município) + destino dentro dos 645 SP.
+      • Anos 2022–2025 → snapshot do Censo 2022, somente saídas, obtido
+        via SIDRA tabela 10329 (API REST).
+        URL: https://sidra.ibge.gov.br/tabela/10329
+        Filtros API: variável 13373, C469=12188 ("Outro município"),
+        totais nos demais classificadores (sexo, renda, retorno).
+        Em 2022 não temos microdados, então `pendulares_entram_trabalho`
+        fica NaN no intervalo 2022–2025. Decisão metodológica explícita
+        em AUDITORIA_DADOS.md §15 — preferimos NaN a preencher com 2010.
+    Coleta: src/arboviral/scraping/mobilidade_pendular.py
+    Parsing: src/arboviral/ingestion/mobilidade_pendular.py
+  variaveis:
+    pendulares_entram_trabalho: {tipo: int_nullable, descricao: "número estimado de pessoas residentes em outro município SP que trabalham neste município (vintage 2010 apenas; NaN em 2022+)"}
+    pendulares_saem_trabalho: {tipo: int, descricao: "número estimado de pessoas residentes neste município que trabalham em outro município SP (vintage 2010 para anos ≤2021, vintage 2022 para anos ≥2022)"}
+
+sih_sus:
+  fonte: datasus_sih_aih_rd
+  periodicidade: mensal
+  observacao: |
+    Internações hospitalares pelo SUS classificadas como arbovirose pelo
+    CID-10 do diagnóstico principal. Lê os arquivos RDSP{AAMM}.dbc (AIH-RD,
+    versão reduzida das Autorizações de Internação Hospitalar) baixados
+    do FTP DATASUS — um arquivo por mês para a janela 2015-2025
+    (132 arquivos, ~2 GB total).
+    URL: ftp://ftp.datasus.gov.br/dissemin/publicos/SIHSUS/200801_/Dados/
+    Campos lidos: MUNIC_RES (município de residência, 6 dígitos DATASUS),
+    DT_INTER (data de internação, AAAAMMDD), DIAG_PRINC (CID-10).
+    Lookup IBGE 6→7 dígitos reaproveita data/lookup/municipios_sp_estacoes_inmet.xlsx.
+    Agrega por (cod_ibge, ano_internacao, mes_internacao, doenca).
+    Classificação CID-10 → doença:
+      A90 + A91         → dengue (clássico + grave/hemorrágico)
+      A92.0             → chikungunya
+      A92.5 + A92.8     → zika (A92.8 era genérico antes do código próprio em 2017)
+      A95*              → febre amarela
+    Diferença do SINAN: SINAN registra a notificação (vigilância); SIH-SUS
+    registra a internação efetiva (severidade). SIH inclui residentes SP
+    internados em outros estados — captura busca por tratamento em centros
+    de referência.
+    Cobertura: apenas SUS (sem plano de saúde privado). Reflete só casos
+    graves; arbovirose leve normalmente não interna.
+    Coleta: src/arboviral/scraping/sih_sus.py
+    Parsing: src/arboviral/ingestion/sih_sus.py
+  variaveis:
+    sih_internacoes_dengue: {tipo: int, descricao: "internações pelo SUS por dengue (CID A90 + A91) no município de residência"}
+    sih_internacoes_chikungunya: {tipo: int, descricao: "internações pelo SUS por chikungunya (CID A92.0)"}
+    sih_internacoes_zika: {tipo: int, descricao: "internações pelo SUS por zika (CID A92.5 + A92.8)"}
+    sih_internacoes_febre_amarela: {tipo: int, descricao: "internações pelo SUS por febre amarela (CID A95*)"}

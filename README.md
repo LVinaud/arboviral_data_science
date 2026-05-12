@@ -56,6 +56,8 @@ O pipeline de ingestão está **100% implementado** para todos os 645 município
 | `mapbiomas.parquet` | MapBiomas Brasil — Coleção 10.1 | 2015–2024, anual | Script automático (`scraping/mapbiomas.py`) |
 | `esf.parquet` | e-Gestor APS — cobertura ESF | 2015–2025, mensal | Script automático (`scraping/esf_coverage.py`, API REST) |
 | `vacinacao_fa.parquet` | DATASUS PNI — cobertura vacinal FA | 2015–2025, anual (gap 2017) | CSV manual (TabNet, formato inteli.gente) |
+| `mobilidade_pendular.parquet` | IBGE Censo 2010 (microdados PESS) + IBGE Censo 2022 (SIDRA 10329) | 2010 + 2022 (série anual no master) | Script automático (`scraping/mobilidade_pendular.py`); 2010 reconstrói matriz O-D via V0660/V6604 ponderada por V0010, 2022 traz só saídas via API REST |
+| `sih_sus.parquet` | DATASUS — SIH-SUS, AIH-RD (internações hospitalares) | 2015–2025, mensal | Script automático (`scraping/sih_sus.py`); classifica internação por CID-10 (A90, A91, A92.0, A92.5, A92.8, A95) e agrega por município de residência |
 
 Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 
@@ -64,7 +66,7 @@ Uma auditoria detalhada de qualidade dos dados está em `AUDITORIA_DADOS.txt`.
 `src/arboviral/transform/build_master.py` gera `data/processed/municipio_mes.parquet`:
 
 - **85.140 linhas** · 645 municípios SP × 11 anos (2015–2025) × 12 meses
-- **79 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + 9 de latência SINAN (proxy de subnotificação) + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação, área e densidade populacional, 5 categorias de uso do solo (MapBiomas), 5 da cobertura APS/ESF (e-Gestor MS), **1 de cobertura vacinal contra febre amarela (PNI/DATASUS)**
+- **85 colunas**: chave, geolocalização (lookup INMET), 12 variáveis SINAN (3 doenças) + 9 de latência SINAN (proxy de subnotificação) + 2 de febre amarela, 7 variáveis climáticas (NASA POWER), saúde, PIB/pop/GINI, CAPAG/IDH-M, água/esgoto (SINISA), gestão/desastres (MUNIC), habitação, área e densidade populacional, 5 categorias de uso do solo (MapBiomas), 5 da cobertura APS/ESF (e-Gestor MS), 1 de cobertura vacinal contra febre amarela (PNI/DATASUS), 2 de mobilidade pendular intermunicipal (Censo 2010 microdados em 2015–2021 + Censo 2022 SIDRA em 2022–2025) e **4 de internações hospitalares pelo SUS por arbovirose (SIH-SUS, CID A90/A91/A92.0/A92.5/A92.8/A95)**
 
 **Decisões metodológicas documentadas:**
 - *População 2024–2025*: forward-fill a partir das estimativas IBGE de 2023 (IBGE só publica até 2023). Alternativa rejeitada: ajustar modelo de tendência populacional. Forward-fill foi escolhida por simplicidade e por ser conservadora — variação populacional municipal anual é tipicamente <2%, dentro da margem de erro da própria estimativa do IBGE.
