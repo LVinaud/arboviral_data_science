@@ -31,6 +31,7 @@ demo da banca e para o paper, todas dentro do app (sem mudanças no core):
 | 1.7 | Versão em inglês da interface (i18n PT/EN, toggle no canto da sidebar) | ✅ feito — camada `app/i18n/`, 387 chaves em paridade pt/en, smoke-test cobrindo 7 telas × 2 idiomas |
 | 1.8 | Mapa com múltiplas granularidades (município → DRS → região intermediária) | ✅ feito — radio na sidebar; lookup gerado por `scripts/gerar_geo_lookup.py` a partir do scraping da SES-SP + IBGE/`geobr`; agregação em `app/lib/agregacao_geo.py` (prob ponderada por população, casos somados) |
 | 1.9 | Animação temporal mensal (movimento da doença ao longo do ano) | ✅ feito — frames Plotly + slider + play; cor codifica probabilidade, tamanho da bolinha codifica casos nos níveis agregados |
+| 1.10 | Modo produção: predição para o mês corrente | 🔜 pendente — hoje o app só serve os folds de backtesting (2022–2024). Para um gestor olhar "o alerta deste mês" precisaríamos de (a) features t–1 atualizadas, esbarrando na latência de notificação do SINAN (~30–60 d) — provavelmente exige nowcasting; (b) um modelo "produção" retreinado com tudo até o mês anterior, separado dos folds de validação; (c) job mensal de inferência gravando `data/processed/predicoes_atual.parquet`. É entrega de plataforma, não de IC — fica para depois da defesa. |
 
 ---
 

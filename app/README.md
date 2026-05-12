@@ -21,8 +21,8 @@ app/
 │   ├── municipio.py                # detalhe + explicação local por município
 │   ├── mapa.py                     # mapa de SP por nível de risco — 3 granularidades + animação mensal
 │   ├── comparativo.py              # 4 doenças lado a lado (heatmap + série histórica)
-│   ├── variaveis.py                # catálogo das 140 features (categoria, fonte, NaN%)
-│   └── sobre.py                    # roadmap do projeto e plano de publicação
+│   ├── sobre.py                    # visão geral + coleta de dados + catálogo de features + treino e avaliação
+│   └── proximos_passos.py          # roadmap do projeto e plano de publicação
 ├── lib/
 │   ├── carregar.py                 # loaders cacheados de dados/modelos
 │   ├── predicao.py                 # wrappers (categorizar_risco, justificar_alerta)
@@ -342,6 +342,14 @@ abreviação do mês: "Jan", "Fev"...) + série histórica das 4 doenças
 sobrepostas (cores fixas por doença, atualizadas para a paleta do design).
 
 ### Sobre o projeto (`screens/sobre.py`)
+Página rolável em quatro seções: (1) **Visão geral** — motivação, formulação
+do problema, RQs, autoria; (2) **Coleta de dados** — pipeline scraping →
+ingestion → master + tabela de fontes integradas + decisões metodológicas;
+(3) **Catálogo de variáveis** — todas as 140 features (busca + filtros +
+distribuição por categoria); (4) **Treinamento e avaliação** — portfolio de
+7 modelos, expanding window, métricas, explicabilidade uniforme, achados.
+
+### Próximos passos (`screens/proximos_passos.py`)
 3 cards-resumo dos horizontes (curto/médio/longo) + tabs com cada seção
 extraída do `ROADMAP.md` da raiz — atualização do arquivo reflete aqui
 automaticamente.

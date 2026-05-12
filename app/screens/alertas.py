@@ -73,21 +73,18 @@ with st.sidebar:
         preds[(preds["doenca"] == doenca) & (preds["definicao"] == definicao)
               & (preds["modelo"] == modelo) & (preds["fold_ano_teste"] == fold)]["target_mes"].unique()
     )
-    mes_sel = st.selectbox(
-        t("comum.mes_predito"), ["Todos"] + list(meses_disp), index=0,
-        format_func=lambda x: t("comum.todos_meses") if x == "Todos" else nome_mes(x),
+    mes = st.selectbox(
+        t("comum.mes_predito"), list(meses_disp),
+        index=len(meses_disp) - 1,
+        format_func=nome_mes,
         help=t("alertas.mes_help"),
     )
-    mes = None if mes_sel == "Todos" else int(mes_sel)
 
     risco_min = st.slider(t("alertas.risco_min_label"), 0.0, 1.0, 0.5, 0.05)
 
-# fold_ano_teste já é o ano do mês predito (target_year), então casa com `mes`
-# (que agora é target_mes) — não há mais defasagem entre o rótulo e a predição.
-_recorte_mes = (
-    ano_mes_humano(fold, mes) if mes
-    else t("alertas.fold_todos", ano=fold)
-)
+# Modelo prediz mês a mês — o recorte de alerta sempre se refere a um
+# (ano, mês) específico, nunca ao ano inteiro.
+_recorte_mes = ano_mes_humano(fold, mes)
 
 # --- Header ---
 page_header(
@@ -113,9 +110,8 @@ df = preds[
     & (preds["modelo"] == modelo)
     & (preds["fold_ano_teste"] == fold)
     & (preds["prob_predita"] >= risco_min)
+    & (preds["target_mes"] == mes)
 ].copy()
-if mes is not None:
-    df = df[df["target_mes"] == mes]
 
 df = df.merge(municipios[["cod_ibge", "nome_municipio"]], on="cod_ibge", how="left")
 # zip(*serie_vazia) retorna [], que não pode ser unpacked em 2 — proteger o caso

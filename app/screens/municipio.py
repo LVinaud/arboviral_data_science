@@ -123,8 +123,6 @@ page_header(
 chips_html = " ".join([
     chip(t("municipio.chips.ibge", cod=cod), "mono"),
     chip(t("municipio.chips.populacao", pop=f"{pop:,}".replace(",", "."))),
-    chip(t("municipio.chips.estacao", est=mun_info["estacao_inmet"])),
-    chip(t("municipio.chips.distancia", dist=f"{mun_info['dist_estacao_km']:.1f}")),
 ])
 st.markdown(chips_html, unsafe_allow_html=True)
 st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)

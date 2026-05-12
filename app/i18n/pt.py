@@ -29,8 +29,8 @@ STRINGS: dict = {
         "municipio": "Município",
         "mapa": "Mapa de SP",
         "comparativo": "Comparativo",
-        "variaveis": "Variáveis",
         "sobre": "Sobre o projeto",
+        "proximos_passos": "Próximos passos",
     },
 
     # ============================================================
@@ -322,8 +322,8 @@ STRINGS: dict = {
             "secao_probabilidade": "Probabilidade prevista mês a mês",
             "trace_probabilidade": "Probabilidade prevista",
             "trace_surto": "Surto real",
-            "hover_prob": "<b>%{{customdata}}</b><br>Prob: %{{y:.1%}}<extra></extra>",
-            "hover_surto": "<b>%{{customdata}}</b><br>Surto confirmado<extra></extra>",
+            "hover_prob": "<b>%{customdata}</b><br>Prob: %{y:.1%}<extra></extra>",
+            "hover_surto": "<b>%{customdata}</b><br>Surto confirmado<extra></extra>",
             "y_axis": "Probabilidade",
             "x_axis_mes_predito": "Mês predito",
             "secao_historico": "Histórico de casos notificados — {doenca}",
@@ -439,16 +439,244 @@ STRINGS: dict = {
     },
 
     # ============================================================
-    # screens/variaveis.py
+    # screens/sobre.py — visão geral, coleta de dados, variáveis e treino
     # ============================================================
-    "variaveis": {
-        "titulo": "Catálogo de variáveis",
+    "sobre": {
+        "titulo": "Sobre o projeto",
         "descricao": (
-            "Todas as **{n_features} features** que entram nos modelos, com nome técnico, "
-            "descrição em português, fonte de origem, tipo e estatísticas. "
-            "Útil para auditoria do que o modelo realmente vê e para checar lacunas (NaN%)."
+            "Como esta plataforma prevê surtos de dengue, zika, chikungunya e febre amarela "
+            "nos 645 municípios paulistas, explicado em linguagem simples."
         ),
-        "crumbs": "PLATAFORMA / VARIÁVEIS",
+        "crumbs": "PLATAFORMA / SOBRE",
+        # ----- Por que existe -----
+        "intro": {
+            "secao": "Por que esta plataforma existe?",
+            "motivacao": (
+                "Toda epidemia começa antes de virar manchete. Quando o sistema de saúde "
+                "percebe que um município está em surto, o pior normalmente já aconteceu. "
+                "Leitos ficam cheios, agentes sobrecarregados, campanhas atrasadas. A "
+                "vigilância tradicional opera de forma reativa, com defasagem que pode "
+                "chegar a 30 ou 60 dias entre o caso ocorrer e a notificação consolidar."
+            ),
+            "objetivo": (
+                "A proposta é deslocar essa lógica para um regime preditivo. Combinamos "
+                "dados epidemiológicos, climáticos, demográficos, ambientais e de "
+                "cobertura de saúde para estimar, com um mês de antecedência, a "
+                "probabilidade de surto em cada um dos 645 municípios paulistas. Cada "
+                "alerta é acompanhado da justificativa, ou seja, das variáveis que mais "
+                "pesaram na decisão, para subsidiar ações concretas de prevenção."
+            ),
+            "para_quem_titulo": "Para quem é?",
+            "para_quem": (
+                "Gestores municipais e estaduais de saúde, para apoiar a decisão "
+                "sobre onde concentrar esforço de prevenção. Vigilância "
+                "epidemiológica, como complemento preditivo aos indicadores "
+                "tradicionais. Cidadãos e pesquisadores, com transparência sobre "
+                "como cada alerta foi gerado e possibilidade de auditoria de ponta a "
+                "ponta. Os dados são públicos, o código é aberto e a metodologia está "
+                "documentada."
+            ),
+            "ic_titulo": "Quem desenvolveu",
+            "ic": (
+                "Pesquisa de Iniciação Científica conduzida por Lázaro Pereira Vinaud "
+                "Neto no Instituto de Ciências Matemáticas e de Computação da USP em "
+                "São Carlos, sob orientação do Prof. André Carlos Ponce de Leon "
+                "Ferreira de Carvalho e com apoio da doutoranda Márcia Regina Martins "
+                "Martinez Corso. Custeada pelo Programa Unificado de Bolsas (PUB) da USP."
+            ),
+        },
+        # ----- Como funciona -----
+        "funcionamento": {
+            "secao": "Como funciona, em 4 passos",
+            "intro": (
+                "Combinamos dados públicos de múltiplas fontes e treinamos modelos de "
+                "aprendizado de máquina para reconhecer padrões que antecedem surtos. "
+                "Cada etapa é determinística e reproduzível, e qualquer pessoa pode "
+                "rodar o pipeline a partir do código aberto."
+            ),
+            "passo1_badge": "01",
+            "passo1_titulo": "Coletamos dados públicos",
+            "passo1_texto": (
+                "Quinze fontes oficiais e abertas: SINAN/DATASUS para casos de dengue, "
+                "zika e chikungunya, MS/SVS para febre amarela, NASA POWER para clima, "
+                "IBGE para demografia, economia e áreas, MapBiomas para cobertura do "
+                "solo, e-Gestor APS para atenção primária, PNI para vacinação, além de "
+                "CNES, SINISA, IDH-M, CAPAG e IBGE MUNIC."
+            ),
+            "passo2_badge": "02",
+            "passo2_titulo": "Construímos uma tabela única município × mês",
+            "passo2_texto": (
+                "Cada combinação de município, ano e mês vira uma linha. São 85.140 "
+                "linhas no total: 645 municípios × 11 anos × 12 meses. Sobre essa base "
+                "derivamos 140 variáveis, incluindo defasagens dos casos do mês "
+                "passado e dos últimos 3 e 6 meses, médias móveis, tendências, "
+                "sazonalidade cíclica e indicadores estruturais."
+            ),
+            "passo3_badge": "03",
+            "passo3_titulo": "Treinamos múltiplos modelos e comparamos",
+            "passo3_texto": (
+                "Sete algoritmos competem: dois baselines triviais, persistência e "
+                "climatologia, além de regressão logística, EBM como modelo aditivo "
+                "interpretável e três modelos baseados em árvores: Random Forest, "
+                "XGBoost e LightGBM. Cada doença e cada definição de surto têm seu "
+                "próprio melhor modelo. Não assumimos que um único algoritmo serve para "
+                "tudo."
+            ),
+            "passo4_badge": "04",
+            "passo4_titulo": "Geramos probabilidades e justificativas",
+            "passo4_texto": (
+                "Para cada município o modelo estima a probabilidade de surto no mês "
+                "seguinte e classifica em quatro níveis: baixo, moderado, alto e "
+                "crítico. A justificativa por trás do alerta é calculada via SHAP "
+                "para modelos de árvore ou pelos coeficientes para a regressão "
+                "logística. O gestor vê exatamente quais variáveis empurraram a "
+                "probabilidade para cima."
+            ),
+        },
+        # ----- De onde vêm os dados -----
+        "coleta": {
+            "secao": "De onde vêm os dados?",
+            "intro": (
+                "Tudo o que alimenta o modelo é público e oficial. Sem fontes "
+                "privadas, sem coleta própria. Cada variável pode ser rastreada até o "
+                "portal de origem, garantindo auditabilidade científica e "
+                "administrativa."
+            ),
+            "grupo_saude_titulo": "Saúde",
+            "grupo_saude_texto": (
+                "SINAN/DATASUS fornece casos prováveis de dengue, zika e "
+                "chikungunya por município de residência, mensal desde 2015, com a "
+                "latência de notificação extraída por caso individual. O MS/SVS "
+                "Dados Abertos entrega febre amarela por Local Provável de Infecção, "
+                "que é o critério adequado para uma transmissão silvestre. CNES "
+                "registra leitos hospitalares públicos, o e-Gestor APS acompanha a "
+                "cobertura mensal de Estratégia Saúde da Família e atenção primária, "
+                "e o PNI mantém a cobertura vacinal de febre amarela."
+            ),
+            "grupo_clima_titulo": "Clima",
+            "grupo_clima_texto": (
+                "NASA POWER, com base no produto MERRA-2, fornece temperatura "
+                "média, mínima e máxima, precipitação, umidade relativa, pressão "
+                "atmosférica e vento. A resolução é mensal para cada um dos 645 "
+                "municípios paulistas desde 2015. Geramos defasagens de 1, 2 e 3 "
+                "meses, já que a literatura aponta efeito climático sobre o vetor "
+                "com lag de 1 a 2 meses."
+            ),
+            "grupo_demo_titulo": "Demografia e economia",
+            "grupo_demo_texto": (
+                "IBGE SIDRA disponibiliza população estimada, PIB municipal e "
+                "índice de Gini. O PNUD mantém o IDH municipal e seus componentes. "
+                "O Tesouro Nacional, via CAPAG, classifica a capacidade de "
+                "pagamento dos municípios. Os Censos IBGE de 2010 e 2022 trazem o "
+                "número e a população em aglomerados subnormais."
+            ),
+            "grupo_ambiente_titulo": "Ambiente e território",
+            "grupo_ambiente_texto": (
+                "MapBiomas Coleção 10.1 informa a proporção de área urbana, "
+                "rural, floresta, pastagem e corpos d'água. As áreas territoriais "
+                "do IBGE alimentam a densidade populacional municipal. O SINISA "
+                "cobre saneamento básico, com acesso a água tratada e esgotamento "
+                "sanitário. Esse conjunto é importante porque é o que mais se "
+                "aproxima da pressão vetorial do *Aedes aegypti*."
+            ),
+            "grupo_gestao_titulo": "Gestão municipal",
+            "grupo_gestao_texto": (
+                "IBGE MUNIC 2018 e 2020 descrevem a estrutura institucional do "
+                "município, incluindo vigilância epidemiológica, gestão de risco e "
+                "resposta a desastres. Funciona como variável de capacidade de "
+                "resposta. Municípios mais preparados tendem a ter melhor detecção e "
+                "contenção."
+            ),
+            "fechamento": (
+                "O resultado consolidado são 85.140 linhas, ou seja, 645 "
+                "municípios × 11 anos × 12 meses, e 140 variáveis após "
+                "engenharia de features. É essa matriz que o modelo consome para "
+                "aprender, e que está disponível para auditoria no expander de "
+                "detalhes técnicos abaixo."
+            ),
+        },
+        # ----- Como o computador aprende -----
+        "aprende": {
+            "secao": "Como o computador aprende a prever?",
+            "intro": (
+                "A pergunta crítica é: como saber se o modelo realmente prediz, ou se "
+                "só memorizou o passado? A resposta vem do desenho da validação "
+                "prospectiva. Testamos sempre em períodos que o modelo nunca viu "
+                "durante o treino."
+            ),
+            "metodo_titulo": "Treinou no passado, testou no futuro",
+            "metodo_texto": (
+                "Embaralhar dados ao acaso vazaria informação do futuro para o "
+                "treino, então respeitamos a ordem temporal. O modelo aprende com "
+                "tudo o que aconteceu até o ano X e é avaliado no ano X+1, mês a "
+                "mês. Repetimos para três janelas. Esse desenho simula a operação "
+                "real da plataforma. Se ela estivesse rodando em produção, é assim "
+                "que tomaria decisões."
+            ),
+            "diagrama_titulo": "As três janelas de validação",
+            "diagrama": (
+                "| Rodada | Aprende com | É testado em |\n"
+                "|---|---|---|\n"
+                "| 1ª | dados de 2015 a 2021 | ano de 2022 |\n"
+                "| 2ª | dados de 2015 a 2022 | ano de 2023 |\n"
+                "| 3ª | dados de 2015 a 2023 | ano de 2024 |\n\n"
+                "*O ano de 2025 fica reservado para demonstração e nunca foi visto pelo modelo.*"
+            ),
+            "comparacao_titulo": "Não basta acertar, tem que bater os baselines",
+            "comparacao_texto": (
+                "Sempre comparamos com dois modelos triviais. O primeiro é a "
+                "persistência, que prevê que o próximo mês vai ser como o último. "
+                "O segundo é a climatologia, que prevê que o próximo mês vai ser "
+                "como a média histórica daquele mês. A persistência é um baseline "
+                "forte por causa da autocorrelação temporal de surtos. Nosso modelo "
+                "só é considerado útil se supera essa referência por margem clara, "
+                "especialmente nos meses de início de surto, em que há transição "
+                "de período calmo para surto e a persistência por construção falha."
+            ),
+            "metricas_titulo": "Como medimos desempenho",
+            "metricas_texto": (
+                "Surtos são eventos raros, então a simples acurácia esconde o "
+                "problema. Um modelo que sempre prediz \"sem surto\" acerta 84% dos "
+                "meses, mas é inútil. Por isso a métrica primária é AUPRC, ou "
+                "área sob a curva de precisão e recall, robusta a desbalanceamento. "
+                "Reportamos também o ganho sobre baseline aleatório, o acerto em "
+                "meses de início de surto, que mede a capacidade real de "
+                "antecipação, e a taxa de falsos alarmes em meses normais, que "
+                "representa o custo operacional para o gestor."
+            ),
+            "grafico1_titulo": "Ranking dos modelos por AUPRC médio",
+            "grafico1_eixo": "AUPRC médio (maior é melhor)",
+            "grafico1_legenda": (
+                "Média sobre 30 combinações de doença, definição de surto e janela "
+                "de validação. Random Forest lidera o ranking. A persistência aparece "
+                "como quinto colocado, confirmando que é um baseline competitivo "
+                "graças à autocorrelação temporal de surtos."
+            ),
+            "grafico2_titulo": "Acerto em meses de início de surto: Random Forest vs Persistência",
+            "grafico2_eixo": "Acerto em meses de início (recall)",
+            "grafico2_legenda_persist": "Persistência",
+            "grafico2_legenda_rf": "Random Forest",
+            "grafico2_legenda": (
+                "Em meses de início de surto, ou seja, transição de mês calmo para "
+                "mês de surto, a persistência tem acerto de 0% por construção. O "
+                "Random Forest captura entre 21% e 35% desses inícios, dependendo "
+                "da doença e da definição de surto. É justamente nesses meses que o "
+                "modelo entrega valor real para o gestor: detecta surtos novos com "
+                "1 mês de antecedência."
+            ),
+        },
+        # ----- Catálogo técnico (escondido em expander) -----
+        "catalogo": {
+            "secao": "Detalhe técnico para curiosos",
+            "intro": (
+                "Para auditoria ou aprofundamento: a tabela abaixo lista as "
+                "{n_features} variáveis efetivamente usadas pelos modelos, "
+                "agrupadas em {n_categorias} categorias temáticas. Inclui nome técnico, "
+                "descrição em português, fonte primária, tipo (numérica, booleana ou "
+                "categórica), taxa de valores ausentes e estatísticas descritivas."
+            ),
+            "expander_label": "Ver todas as variáveis usadas pelo modelo",
+        },
         "tipos": {
             "booleana": "booleana",
             "numerica": "numérica",
@@ -518,7 +746,7 @@ STRINGS: dict = {
         },
         "tabela": {
             "info_filtro": (
-                "Mostrando **{n_filtrado} de {n_total}** features "
+                "Mostrando {n_filtrado} de {n_total} features "
                 "(em {n_categorias} categorias)."
             ),
             "secao_distribuicao": "Distribuição por categoria",
@@ -532,15 +760,15 @@ STRINGS: dict = {
     },
 
     # ============================================================
-    # screens/sobre.py
+    # screens/proximos_passos.py
     # ============================================================
-    "sobre": {
-        "titulo": "Sobre o projeto",
+    "proximos": {
+        "titulo": "Próximos passos",
         "descricao": (
             "Plano de evolução da pesquisa — desde o fechamento da IC até material "
             "publicável em artigo internacional. Conteúdo reflete o ROADMAP.md do repositório."
         ),
-        "crumbs": "PLATAFORMA / SOBRE",
+        "crumbs": "PLATAFORMA / PRÓXIMOS PASSOS",
         "secao_resumo": "Em resumo",
         "card_curto_titulo": "Curto prazo",
         "card_curto_desc": (

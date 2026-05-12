@@ -30,8 +30,8 @@ STRINGS: dict = {
         "municipio": "Municipality",
         "mapa": "SP map",
         "comparativo": "Comparison",
-        "variaveis": "Variables",
         "sobre": "About",
+        "proximos_passos": "Next steps",
     },
 
     # ============================================================
@@ -322,8 +322,8 @@ STRINGS: dict = {
             "secao_probabilidade": "Predicted probability month by month",
             "trace_probabilidade": "Predicted probability",
             "trace_surto": "Actual outbreak",
-            "hover_prob": "<b>%{{customdata}}</b><br>Prob: %{{y:.1%}}<extra></extra>",
-            "hover_surto": "<b>%{{customdata}}</b><br>Outbreak confirmed<extra></extra>",
+            "hover_prob": "<b>%{customdata}</b><br>Prob: %{y:.1%}<extra></extra>",
+            "hover_surto": "<b>%{customdata}</b><br>Outbreak confirmed<extra></extra>",
             "y_axis": "Probability",
             "x_axis_mes_predito": "Predicted month",
             "secao_historico": "Reported case history — {doenca}",
@@ -439,16 +439,251 @@ STRINGS: dict = {
     },
 
     # ============================================================
-    # screens/variaveis.py
+    # screens/sobre.py — overview, data collection, variables, training
     # ============================================================
-    "variaveis": {
-        "titulo": "Variable catalog",
+    "sobre": {
+        "titulo": "About the project",
         "descricao": (
-            "All **{n_features} features** that feed the models, with technical name, "
-            "human description, source, type, and statistics. "
-            "Useful for auditing what the model actually sees and for checking gaps (% NaN)."
+            "How this platform forecasts dengue, zika, chikungunya and yellow-fever "
+            "outbreaks across the 645 São Paulo state municipalities, explained in plain language."
         ),
-        "crumbs": "PLATFORM / VARIABLES",
+        "crumbs": "PLATFORM / ABOUT",
+        # ----- Why -----
+        "intro": {
+            "secao": "Why does this platform exist?",
+            "motivacao": (
+                "Every epidemic starts before it makes the news. By the time the "
+                "health system realizes a town is in outbreak, the worst has usually "
+                "already happened. Beds fill up, community workers are overstretched, "
+                "campaigns arrive late. Traditional surveillance is reactive, with a "
+                "lag that can reach 30 or 60 days between a case occurring and the "
+                "consolidated notification."
+            ),
+            "objetivo": (
+                "The proposal is to shift to a predictive regime. We combine "
+                "epidemiological, climatic, demographic, environmental and "
+                "health-coverage data to estimate, with one month of lead time, the "
+                "probability of an outbreak in each of the 645 SP municipalities. "
+                "Each alert is paired with its rationale, that is, the variables that "
+                "weighed most in the decision, so it can support concrete prevention "
+                "actions."
+            ),
+            "para_quem_titulo": "Who is it for?",
+            "para_quem": (
+                "Municipal and state health managers, to support decisions on "
+                "where to focus prevention effort. Epidemiological surveillance, "
+                "as a predictive complement to traditional indicators. Citizens and "
+                "researchers, with transparency about how each alert was generated "
+                "and end-to-end auditability. The data is public, the code is open "
+                "and the methodology is documented."
+            ),
+            "ic_titulo": "Who built it",
+            "ic": (
+                "Undergraduate research project conducted by Lázaro Pereira "
+                "Vinaud Neto at the Institute of Mathematical and Computer "
+                "Sciences, University of São Paulo, São Carlos campus, advised by "
+                "Prof. André Carlos Ponce de Leon Ferreira de Carvalho and with "
+                "support from PhD candidate Márcia Regina Martins Martinez "
+                "Corso. Funded by USP's Unified Scholarship Programme (PUB)."
+            ),
+        },
+        # ----- How it works -----
+        "funcionamento": {
+            "secao": "How it works, in 4 steps",
+            "intro": (
+                "We combine public data from multiple sources and train "
+                "machine-learning models to recognize patterns that precede "
+                "outbreaks. Every step is deterministic and reproducible, and "
+                "anyone can run the pipeline from the open code."
+            ),
+            "passo1_badge": "01",
+            "passo1_titulo": "We collect public data",
+            "passo1_texto": (
+                "Fifteen official, open sources: SINAN/DATASUS for dengue, zika and "
+                "chikungunya cases, MS/SVS for yellow fever, NASA POWER for climate, "
+                "IBGE for demography, economy and areas, MapBiomas for land cover, "
+                "e-Gestor APS for primary care, PNI for vaccination, plus CNES, "
+                "SINISA, IDH-M, CAPAG and IBGE MUNIC."
+            ),
+            "passo2_badge": "02",
+            "passo2_titulo": "We build a single municipality × month table",
+            "passo2_texto": (
+                "Each combination of municipality, year and month becomes one row. "
+                "That gives 85,140 rows in total: 645 municipalities × 11 years × "
+                "12 months. On top of that base we derive 140 features, "
+                "including lags of cases from the previous month and from the last "
+                "3 and 6 months, rolling means, trends, cyclical seasonality and "
+                "structural indicators."
+            ),
+            "passo3_badge": "03",
+            "passo3_titulo": "We train multiple models and compare",
+            "passo3_texto": (
+                "Seven algorithms compete: two trivial baselines, persistence and "
+                "climatology, plus logistic regression, EBM as an interpretable "
+                "additive model and three tree-based models: Random Forest, "
+                "XGBoost and LightGBM. Each disease and each outbreak definition "
+                "has its own best model. We do not assume one algorithm fits "
+                "everything."
+            ),
+            "passo4_badge": "04",
+            "passo4_titulo": "We generate probabilities and rationales",
+            "passo4_texto": (
+                "For each municipality the model estimates the probability of an "
+                "outbreak next month and classifies it into four levels: low, "
+                "moderate, high and critical. The rationale behind the alert is "
+                "computed via SHAP for tree models or by the coefficients for "
+                "logistic regression. The manager sees exactly which variables "
+                "pushed the probability up."
+            ),
+        },
+        # ----- Where data comes from -----
+        "coleta": {
+            "secao": "Where does the data come from?",
+            "intro": (
+                "Everything that feeds the model is public and official. No "
+                "private sources, no proprietary collection. Every variable can be "
+                "traced back to its origin portal, ensuring scientific and "
+                "administrative auditability."
+            ),
+            "grupo_saude_titulo": "Health",
+            "grupo_saude_texto": (
+                "SINAN/DATASUS provides probable dengue, zika and chikungunya "
+                "cases by municipality of residence, monthly since 2015, with "
+                "notification latency extracted per individual case. MS/SVS Open "
+                "Data delivers yellow fever by Likely Place of Infection, the "
+                "appropriate criterion for sylvatic transmission. CNES records "
+                "public hospital beds, e-Gestor APS tracks monthly coverage of "
+                "Family Health Strategy and primary care, and PNI maintains "
+                "yellow-fever vaccination coverage."
+            ),
+            "grupo_clima_titulo": "Climate",
+            "grupo_clima_texto": (
+                "NASA POWER, based on the MERRA-2 product, supplies mean, "
+                "minimum and maximum temperature, precipitation, relative humidity, "
+                "atmospheric pressure and wind. Resolution is monthly for each of "
+                "the 645 SP municipalities since 2015. We generate lags of 1, 2 "
+                "and 3 months, since the literature points to climate-on-vector "
+                "effects with a lag of 1 to 2 months."
+            ),
+            "grupo_demo_titulo": "Demographics and economy",
+            "grupo_demo_texto": (
+                "IBGE SIDRA publishes estimated population, municipal GDP and "
+                "Gini index. UNDP maintains the Municipal HDI and its "
+                "components. National Treasury, via CAPAG, classifies the "
+                "payment capacity of municipalities. The IBGE Censuses of 2010 "
+                "and 2022 provide the number and population of subnormal "
+                "clusters."
+            ),
+            "grupo_ambiente_titulo": "Environment and territory",
+            "grupo_ambiente_texto": (
+                "MapBiomas Collection 10.1 reports the share of urban, rural, "
+                "forest, pasture and water surface. The IBGE territorial areas "
+                "feed municipal population density. SINISA covers basic "
+                "sanitation, with access to treated water and sewage. This set is "
+                "important because it is the closest available proxy for *Aedes "
+                "aegypti* vector pressure."
+            ),
+            "grupo_gestao_titulo": "Municipal management",
+            "grupo_gestao_texto": (
+                "IBGE MUNIC 2018 and 2020 describe the institutional "
+                "structure of the municipality, including epidemiological "
+                "surveillance, risk management and disaster response. It acts as "
+                "a response-capacity variable. Better-prepared municipalities "
+                "tend to have improved detection and containment."
+            ),
+            "fechamento": (
+                "The consolidated result is 85,140 rows, that is, 645 "
+                "municipalities × 11 years × 12 months, and 140 features "
+                "after feature engineering. That is the matrix the model consumes "
+                "to learn, and it is open for auditing in the technical-detail "
+                "expander below."
+            ),
+        },
+        # ----- How the computer learns -----
+        "aprende": {
+            "secao": "How does the computer learn to forecast?",
+            "intro": (
+                "The critical question is: how do we know the model truly "
+                "forecasts, rather than memorizing the past? The answer comes "
+                "from the design of the prospective validation. We always "
+                "test on periods the model has never seen during training."
+            ),
+            "metodo_titulo": "Train on the past, test on the future",
+            "metodo_texto": (
+                "Shuffling data at random would leak future information into "
+                "training, so we respect temporal order. The model learns from "
+                "everything up to year X and is evaluated on year X+1, month by "
+                "month. We repeat this for three windows. This design "
+                "simulates the platform's real operation. If it were "
+                "running in production, this is how it would make decisions."
+            ),
+            "diagrama_titulo": "The three validation windows",
+            "diagrama": (
+                "| Round | Learns from | Is tested on |\n"
+                "|---|---|---|\n"
+                "| 1st | data 2015 to 2021 | year 2022 |\n"
+                "| 2nd | data 2015 to 2022 | year 2023 |\n"
+                "| 3rd | data 2015 to 2023 | year 2024 |\n\n"
+                "*Year 2025 is reserved for demonstration and has never been seen by the model.*"
+            ),
+            "comparacao_titulo": "Hitting the target is not enough, we have to beat the baselines",
+            "comparacao_texto": (
+                "We always compare with two trivial models. The first is "
+                "persistence, which predicts that next month will be like "
+                "the last. The second is climatology, which predicts that "
+                "next month will be like the historical average for that "
+                "month. Persistence is a strong baseline because of the "
+                "temporal autocorrelation of outbreaks. Our model is only "
+                "considered useful if it beats this reference by a clear "
+                "margin, especially in outbreak onset months, where "
+                "there is a transition from calm period to outbreak and "
+                "persistence fails by construction."
+            ),
+            "metricas_titulo": "How we measure performance",
+            "metricas_texto": (
+                "Outbreaks are rare events, so plain accuracy hides the "
+                "problem. A model that always predicts \"no outbreak\" hits "
+                "84% of months but is useless. That is why the primary "
+                "metric is AUPRC, the area under the precision and "
+                "recall curve, robust to imbalance. We also report the "
+                "lift over random baseline, recall in outbreak onset "
+                "months, which measures the real anticipation ability, "
+                "and the false-alarm rate in normal months, which "
+                "represents the operational cost for the manager."
+            ),
+            "grafico1_titulo": "Model ranking by mean AUPRC",
+            "grafico1_eixo": "Mean AUPRC (higher is better)",
+            "grafico1_legenda": (
+                "Average over 30 combinations of disease, outbreak definition and "
+                "validation window. Random Forest leads the ranking. Persistence "
+                "comes fifth, confirming it is a competitive baseline thanks to the "
+                "temporal autocorrelation of outbreaks."
+            ),
+            "grafico2_titulo": "Recall on outbreak-onset months: Random Forest vs Persistence",
+            "grafico2_eixo": "Recall on onset months",
+            "grafico2_legenda_persist": "Persistence",
+            "grafico2_legenda_rf": "Random Forest",
+            "grafico2_legenda": (
+                "On outbreak-onset months, the transition from calm month to outbreak "
+                "month, persistence has 0% recall by construction. Random Forest "
+                "captures between 21% and 35% of those onsets, depending on the "
+                "disease and outbreak definition. These are precisely the months "
+                "where the model delivers real value to the manager: it detects new "
+                "outbreaks with 1 month of lead time."
+            ),
+        },
+        # ----- Technical catalog (hidden in expander) -----
+        "catalogo": {
+            "secao": "Technical detail for the curious",
+            "intro": (
+                "For auditing or deeper inspection: the table below lists the "
+                "{n_features} variables actually used by the models, grouped into "
+                "{n_categorias} thematic categories. Includes technical name, "
+                "Portuguese description, primary source, type (numeric, boolean, or "
+                "categorical), missing-data rate, and descriptive statistics."
+            ),
+            "expander_label": "Show all variables used by the model",
+        },
         "tipos": {
             "booleana": "boolean",
             "numerica": "numeric",
@@ -518,7 +753,7 @@ STRINGS: dict = {
         },
         "tabela": {
             "info_filtro": (
-                "Showing **{n_filtrado} of {n_total}** features "
+                "Showing {n_filtrado} of {n_total} features "
                 "(in {n_categorias} categories)."
             ),
             "secao_distribuicao": "Distribution by category",
@@ -532,16 +767,16 @@ STRINGS: dict = {
     },
 
     # ============================================================
-    # screens/sobre.py
+    # screens/proximos_passos.py
     # ============================================================
-    "sobre": {
-        "titulo": "About the project",
+    "proximos": {
+        "titulo": "Next steps",
         "descricao": (
             "Research roadmap — from the closing of the undergraduate research "
             "to publishable material for an international paper. The content reflects "
             "the ROADMAP.md at the repository root."
         ),
-        "crumbs": "PLATFORM / ABOUT",
+        "crumbs": "PLATFORM / NEXT STEPS",
         "secao_resumo": "Summary",
         "card_curto_titulo": "Short term",
         "card_curto_desc": (

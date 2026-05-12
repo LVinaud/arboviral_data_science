@@ -44,8 +44,8 @@ paginas = [
     st.Page("screens/municipio.py", title=t("nav.municipio"), icon="🔎"),
     st.Page("screens/mapa.py", title=t("nav.mapa"), icon="🗺️"),
     st.Page("screens/comparativo.py", title=t("nav.comparativo"), icon="📊"),
-    st.Page("screens/variaveis.py", title=t("nav.variaveis"), icon="📋"),
     st.Page("screens/sobre.py", title=t("nav.sobre"), icon="ℹ️"),
+    st.Page("screens/proximos_passos.py", title=t("nav.proximos_passos"), icon="🧭"),
 ]
 
 nav = st.navigation(paginas)
