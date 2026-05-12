@@ -368,27 +368,48 @@ STRINGS: dict = {
     "mapa": {
         "titulo": "Risk map — São Paulo",
         "descricao": (
-            "Predicted outbreak probability in {mes_humano} for "
+            "Predicted outbreak probability across {fold} for "
             "{doenca} · {definicao} · {modelo}. "
-            "Each point = 1 municipality. Color indicates risk level."
+            "Use the slider to scrub through months or switch granularity in the sidebar."
         ),
-        "crumbs": "PLATFORM / MAP / {doenca_upper} / {mes_upper}",
-        "mes_help": "Month for which the map shows the predicted probability (alert target).",
+        "crumbs": "PLATFORM / MAP / {doenca_upper} / {fold}",
+        "granularidade": {
+            "label": "Granularity",
+            "help": (
+                "Municipality (645): individual bubbles. "
+                "DRS (17): São Paulo State Health Regional Departments. "
+                "Intermediate region (11): IBGE official geographic division (2017)."
+            ),
+            "municipio": "Municipality (645)",
+            "drs": "DRS (17)",
+            "rgi": "Intermediate region (11)",
+        },
+        "legenda": {
+            "cor": "Color: predicted probability (population-weighted mean when aggregated)",
+            "bolinha": "Bubble size: reported cases in the unit (sum when aggregated)",
+        },
+        "hover": {
+            "probabilidade": "Probability",
+            "casos": "Cases",
+            "populacao": "Population",
+        },
         "metricas": {
-            "mapeados_label": "Mapped municipalities",
-            "criticos_delta": "≥ 75% prob.",
-            "altos_delta": "50% to 75%",
-            "risco_medio_label": "Average risk",
-            "risco_medio_delta": "state-wide mean",
+            "unidades_label": "Mapped units",
+            "criticos_label": "Peak of critical units",
+            "criticos_delta": "≥ 75% prob. in any month",
+            "casos_ano_label": "Total cases in year",
+            "casos_ano_delta": "state-wide notification sum",
+            "risco_medio_label": "Yearly average risk",
+            "risco_medio_delta": "state-wide pop.-weighted mean",
         },
         "top5": {
-            "secao": "Top 5 highest-risk municipalities",
-            "surto_real": "Actual outbreak?",
+            "secao": "Top 5 units by yearly average risk",
+            "casos": "Cases in year",
         },
         "rodape": (
-            "Interactive map: click and drag to pan, scroll to zoom, "
-            "hover over a point for details. "
-            "Future version: choropleth with municipal boundary geojson."
+            "Interactive map: use the slider/play to animate, click and drag to pan, "
+            "scroll to zoom. DRS polygons obtained by dissolving municipalities (source: SES-SP, scraped 2026-05-09); "
+            "intermediate-region polygons from IBGE 2017."
         ),
     },
 

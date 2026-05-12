@@ -19,7 +19,7 @@ app/
 │   ├── visao_geral.py              # hero institucional + métricas + cards de navegação
 │   ├── alertas.py                  # lista priorizada de municípios em risco
 │   ├── municipio.py                # detalhe + explicação local por município
-│   ├── mapa.py                     # mapa de SP por nível de risco (scatter_mapbox)
+│   ├── mapa.py                     # mapa de SP por nível de risco — 3 granularidades + animação mensal
 │   ├── comparativo.py              # 4 doenças lado a lado (heatmap + série histórica)
 │   ├── variaveis.py                # catálogo das 140 features (categoria, fonte, NaN%)
 │   └── sobre.py                    # roadmap do projeto e plano de publicação
@@ -27,10 +27,12 @@ app/
 │   ├── carregar.py                 # loaders cacheados de dados/modelos
 │   ├── predicao.py                 # wrappers (categorizar_risco, justificar_alerta)
 │   ├── tema.py                     # design system: aplica CSS, helpers HTML
-│   └── labels.py                   # humanização de códigos técnicos (rf, inc100, dengue,
-│                                   #   pct_floresta, dengue_casos_lag1) → strings PT/EN
+│   ├── labels.py                   # humanização de códigos técnicos (rf, inc100, dengue,
+│   │                               #   pct_floresta, dengue_casos_lag1) → strings PT/EN
+│   └── agregacao_geo.py            # combina predições + casos + lookup p/ 3 granularidades
+│                                   #   (mun/DRS/RGI); regras de agregação documentadas
 ├── i18n/                           # camada bilíngue PT-BR / EN — só UI, core fica em PT
-│   ├── pt.py / en.py               # dicionários (376 chaves em paridade)
+│   ├── pt.py / en.py               # dicionários (387 chaves em paridade)
 │   ├── __init__.py                 # API: t(), language_selector(), set_language()
 │   ├── _validar.py                 # checa paridade de chaves entre pt.py e en.py
 │   └── README.md                   # quando traduzir, como adicionar idioma, convenções
@@ -240,9 +242,99 @@ Selectbox **Mês de análise (SHAP)** permite focar a explicação num mês
 específico em vez do pico do ano.
 
 ### Mapa (`screens/mapa.py`)
-scatter_mapbox com paleta verde→mostarda→laranja→vermelho (alinhada aos
-níveis 0.25/0.50/0.75 do design), 4 métricas no topo, legenda de risco
-e tabela "Top 5 municípios em maior risco" abaixo do mapa.
+Mapa hierárquico com **3 granularidades selecionáveis** e **animação mensal
+via slider/play**:
+
+- **Município (645)** — `scatter_mapbox` com cor pela probabilidade
+  (paleta verde→mostarda→laranja→vermelho alinhada aos níveis 0.25/0.50/0.75).
+  Comportamento idêntico à versão pré-2026-05: mantemos uma única camada
+  porque agrupar tamanho por casos em 645 pontos confunde mais do que ajuda.
+- **DRS (17)** — `choropleth_mapbox` (cor pela probabilidade) +
+  `scatter_mapbox` sobreposto (tamanho proporcional aos casos notificados,
+  escala raiz-quadrada para preservar visibilidade entre cidades muito
+  diferentes).
+- **Região Intermediária (11)** — idem DRS, mas com divisão geográfica
+  oficial do IBGE (2017) — útil como referência cientificamente padrão
+  quando o público da apresentação não é da saúde.
+
+A animação usa frames do Plotly (`go.Frame`) — um por mês predito. O slider
+permite navegar manualmente; o botão ▶ percorre os 12 meses em ~8 segundos.
+
+Métricas no topo são **anuais** (não de um mês específico): unidades
+mapeadas, pico de unidades críticas (≥75% prob. em qualquer mês), casos
+totais no ano, risco médio anual ponderado por população. O Top 5 abaixo
+do mapa lista as unidades com maior probabilidade média no ano.
+
+#### Como o agrupamento em regiões funciona
+
+Esse é o aspecto mais sutil do mapa hierárquico — vale entender porque a
+manutenção futura passa por aqui. **Tudo abaixo é responsabilidade exclusiva
+do app**; o core (`src/arboviral/`, parquets, configs) NÃO sabe que DRS ou
+RGI existem.
+
+O agrupamento é resolvido em **duas etapas distintas**:
+
+##### Etapa 1: Identidade (qual município pertence a qual região)
+
+Estática, resolvida UMA vez por `scripts/gerar_geo_lookup.py`. O output
+fica versionado em `data/lookup/geo/` e o app lê os arquivos prontos.
+
+- **Município → RGI**: feito por *spatial join* (`geopandas.sjoin` com
+  `predicate="within"`). Cada município é atribuído à RGI cujo polígono
+  contém o centroide municipal. Determinístico, não depende de listas
+  textuais.
+- **Município → DRS**: a SES-SP **não publica geojson nem CSV** de DRS.
+  As listas de municípios por DRS vieram de *scraping* das 17 subpáginas
+  de [saude.sp.gov.br/.../departamentos-regionais-de-saude/](https://saude.sp.gov.br/ses/institucional/departamentos-regionais-de-saude/),
+  hardcoded no script (`DRS_MUNICIPIOS`). Os nomes são casados com o IBGE
+  por normalização (`uppercase + sem acentos`); 641/645 casam de primeira,
+  e 4 renomeações conhecidas tratam as divergências (Embu → Embu das Artes,
+  Florínia → Florínea, Ilha Bela → Ilhabela, "Santo Antônio Da" → "De Posse").
+- **Polígonos das DRS**: gerados por *dissolve* dos polígonos municipais
+  agrupados pelo DRS atribuído acima. Resultado: 17 polígonos cobrindo
+  exatamente o estado, com fronteiras consistentes com a divisão municipal
+  do IBGE.
+
+##### Etapa 2: Agregação (como combinar valores ao subir de nível)
+
+Dinâmica, em runtime, feita por `lib/agregacao_geo.py::agregar()` a cada
+mudança de granularidade/filtro. Regras:
+
+| Variável         | Como agrega                       | Por quê                                                                                                                                                                                                                              |
+|------------------|-----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `prob_predita`   | Média ponderada por população     | Probabilidade não é aditiva. Média simples sobrestima cidades pequenas: 90 % em um município de 500 hab empataria com 20 % em SP (12 M). Ponderar por pop. dá o "risco médio para uma pessoa aleatória da região" — métrica honesta. |
+| `casos`          | Soma simples                      | Casos *são* aditivos. 100 casos em A + 50 em B = 150 na região A+B.                                                                                                                                                                  |
+| `lat`, `lon`     | Centroide ponderado por população | Centroide geométrico do polígono cairia em meio rural quando há uma capital + interior. Ponderar por pop. coloca a bolinha onde está a maioria das pessoas.                                                                          |
+| `populacao`      | Soma simples                      | Informativa (também é o denominador da prob. ponderada).                                                                                                                                                                             |
+
+Para o nível **Município** não há agregação — cada linha do output já é
+uma unidade. A função `agregar(predicoes, master, doenca, nivel)` sempre
+devolve o mesmo schema (`id_unidade, nome_unidade, target_ano, target_mes,
+prob_predita, casos, populacao, lat, lon, y_true`), o que mantém
+`screens/mapa.py` simples.
+
+##### Assets pré-computados (versionados em `data/lookup/geo/`)
+
+| Arquivo                                 | Tamanho | Conteúdo                                                  |
+|-----------------------------------------|--------:|-----------------------------------------------------------|
+| `municipios_sp.geojson`                 |  3.5 MB | 645 polígonos municipais (IBGE 2020 simplificados)        |
+| `drs_sp.geojson`                        |  1.8 MB | 17 polígonos de DRS (dissolve de municípios)              |
+| `regioes_intermediarias_sp.geojson`     | 650 KB  | 11 polígonos de RGI (IBGE 2017)                           |
+| `municipios_sp_lookup.csv`              |  61 KB  | 645 linhas: `cod_ibge → drs, rgi_codigo, rgi_nome, lat, lon` |
+
+Esses arquivos são regenerados por `scripts/gerar_geo_lookup.py` — script
+pontual, **não** parte do pipeline reproducível. Suas dependências
+(`geopandas`, `geobr`) ficam FORA do `pyproject.toml`; instale só pra
+rodar o script e desinstale depois pra manter o venv enxuto. Detalhes em
+[`data/lookup/geo/README.md`](../data/lookup/geo/README.md).
+
+##### Quando regenerar o lookup?
+
+- Mudança na lista oficial de municípios por DRS (rara — exige decreto da SES-SP).
+- Atualização da divisão IBGE (RGI poderia mudar; a última foi 2017).
+- Criação de novos municípios (eventos raros em SP).
+
+Os arquivos atuais refletem a divisão vigente em **2026-05-09**.
 
 ### Comparativo (`screens/comparativo.py`)
 Heatmap 4 doenças × 12 meses (linhas com nome humano, colunas com

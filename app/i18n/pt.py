@@ -368,27 +368,48 @@ STRINGS: dict = {
     "mapa": {
         "titulo": "Mapa de risco — São Paulo",
         "descricao": (
-            "Probabilidade prevista de surto em {mes_humano} para "
+            "Probabilidade prevista de surto ao longo de {fold} para "
             "{doenca} · {definicao} · {modelo}. "
-            "Cada ponto = 1 município. Cor indica nível de risco."
+            "Use o slider para percorrer os meses ou troque a granularidade no canto da sidebar."
         ),
-        "crumbs": "PLATAFORMA / MAPA / {doenca_upper} / {mes_upper}",
-        "mes_help": "Mês para o qual o mapa mostra a probabilidade prevista (alvo do alerta).",
+        "crumbs": "PLATAFORMA / MAPA / {doenca_upper} / {fold}",
+        "granularidade": {
+            "label": "Granularidade",
+            "help": (
+                "Município (645): bolinhas individuais. "
+                "DRS (17): agrupa por Departamento Regional de Saúde da SES-SP. "
+                "Região intermediária (11): divisão geográfica oficial do IBGE (2017)."
+            ),
+            "municipio": "Município (645)",
+            "drs": "DRS (17)",
+            "rgi": "Região intermediária (11)",
+        },
+        "legenda": {
+            "cor": "Cor: probabilidade prevista (média ponderada por população quando agregada)",
+            "bolinha": "Tamanho da bolinha: casos notificados na unidade (soma quando agregada)",
+        },
+        "hover": {
+            "probabilidade": "Probabilidade",
+            "casos": "Casos",
+            "populacao": "População",
+        },
         "metricas": {
-            "mapeados_label": "Municípios mapeados",
-            "criticos_delta": "≥ 75% prob.",
-            "altos_delta": "50% a 75%",
-            "risco_medio_label": "Risco médio",
-            "risco_medio_delta": "média estadual",
+            "unidades_label": "Unidades mapeadas",
+            "criticos_label": "Pico de unidades críticas",
+            "criticos_delta": "≥ 75% prob. em algum mês",
+            "casos_ano_label": "Casos totais no ano",
+            "casos_ano_delta": "soma de notificações no estado",
+            "risco_medio_label": "Risco médio anual",
+            "risco_medio_delta": "média estadual ponderada por pop.",
         },
         "top5": {
-            "secao": "Top 5 municípios em maior risco",
-            "surto_real": "Surto real?",
+            "secao": "Top 5 unidades em maior risco médio anual",
+            "casos": "Casos no ano",
         },
         "rodape": (
-            "Mapa interativo: clique e arraste para mover, scroll para zoom, "
-            "passe o mouse sobre um ponto para ver detalhes. "
-            "Versão futura: choropleth com geojson dos limites municipais."
+            "Mapa interativo: use o slider/play para animar, clique e arraste para mover, "
+            "scroll para zoom. Polígonos das DRS gerados por dissolve de municípios (fonte: SES-SP, scraping 2026-05-09); "
+            "polígonos de regiões intermediárias do IBGE 2017."
         ),
     },
 

@@ -21,6 +21,17 @@ Este documento organiza o que vem após a finalização do pipeline atual. Divid
 
 **Resultado esperado**: IC final com 4 RQs respondidas + análise de antecipação (achado central) + relatório consolidado para defesa.
 
+### Sugestões do orientador (2026-05-09) — escopo de visualização
+
+Após avaliar a plataforma, o orientador propôs três melhorias de UX para a
+demo da banca e para o paper, todas dentro do app (sem mudanças no core):
+
+| # | Item | Status |
+|---|---|---|
+| 1.7 | Versão em inglês da interface (i18n PT/EN, toggle no canto da sidebar) | ✅ feito — camada `app/i18n/`, 387 chaves em paridade pt/en, smoke-test cobrindo 7 telas × 2 idiomas |
+| 1.8 | Mapa com múltiplas granularidades (município → DRS → região intermediária) | ✅ feito — radio na sidebar; lookup gerado por `scripts/gerar_geo_lookup.py` a partir do scraping da SES-SP + IBGE/`geobr`; agregação em `app/lib/agregacao_geo.py` (prob ponderada por população, casos somados) |
+| 1.9 | Animação temporal mensal (movimento da doença ao longo do ano) | ✅ feito — frames Plotly + slider + play; cor codifica probabilidade, tamanho da bolinha codifica casos nos níveis agregados |
+
 ---
 
 ## 2. Médio prazo — Top 10 fontes de dados a adicionar
