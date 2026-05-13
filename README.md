@@ -226,7 +226,7 @@ A narrativa para o relatório/artigo é forte: **ao adicionar fontes ambientais 
 2. **Hyperparameter tuning** com Optuna (atual usa defaults)
 3. **Calibração de probabilidades** (importante para uso em produção)
 4. **Plataforma**: interface integrada à inteli.gente, exibindo top features para cada alerta. App Streamlit funcional em `app/` — design system completo, 7 telas (Visão geral, Alertas, Município, Mapa, Comparativo, Variáveis, Sobre), interface bilíngue PT/EN (toggle no topo da sidebar; ver [`app/i18n/README.md`](app/i18n/README.md)), explicabilidade local para todos os modelos do portfolio (não apenas árvores).
-5. **5 fontes restantes do top 10**: LIRAa (prioridade #1 — único do top 3 ainda pendente), mobilidade pendular, SIH-SUS, eventos massivos, NDVI.
+5. **Fontes restantes do top 10** (após Onda 2): LIRAa (#1 — pausado, aguardando LAI à CCD-SP) e NDVI (#10 — sazonalidade vegetal via Earth Engine). O item original #8 (eventos massivos) foi descartado por inviabilidade prática (curadoria manual desproporcional ao ganho).
 6. Trabalho futuro: MEM (L5) via ponte R, framing alternativo para FA (anomaly detection).
 
 ## Variáveis e fontes de dados

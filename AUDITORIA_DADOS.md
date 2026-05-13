@@ -1023,6 +1023,16 @@ Cobertura no master: 100% para `saem` em todos os anos; 100% para `entram` nos a
 3. Atualizar `build()` para usar a matriz O-D 2022 para anos ≥ 2022, preenchendo a coluna `pendulares_entram_trabalho` que hoje está NaN.
 4. Re-treinar portfólio e reportar Δ AUPRC.
 
+### 15.1 Integração ao `features.parquet` (2026-05-12)
+
+`pendulares_entram_trabalho` e `pendulares_saem_trabalho` foram adicionadas a `src/arboviral/features/build_features.py` como **estáticas-anuais passadas direto** (sem transformação). Ficam expostas a todas as 4 doenças-alvo. Para o run `--no-cross`, não são afetadas pelo mascaramento porque o mascaramento exclui apenas colunas com prefixo de outra doença (`dengue_`, `zika_`, `chikungunya_`, `febre_amarela_`) — mobilidade pendular não tem prefixo de doença.
+
+`pendulares_entram_trabalho` é NaN em 2022–2025 por construção. Modelos de árvore (RF/XGB/LGBM) tratam NaN nativamente; Regressão Logística e EBM dependem do descarte de coluna all-NaN no fold (`train.py:172-176`). Como a coluna **não** é all-NaN nos folds 2022/2023/2024 (apenas o teste é NaN; o treino tem dados 2015–2021), a coluna é mantida — o modelo aprende com 2015–2021 mas tenta predizer 2022+ usando NaN onde não deveria. Para LogReg/EBM isso vira um problema silencioso. **Nota de ação**: quando o IBGE liberar microdados 2022, esse problema some; até lá, vale considerar mask específico em LogReg para excluir essa coluna nos folds de teste 2023/2024.
+
+### 15.2 Efeito sobre a hipótese cross-doença — sensitivity 2026-05-13
+
+Mobilidade pendular é uma das duas fontes da Onda 2 que mais alteram o veredicto da hipótese cross-doença (a outra é SIH-SUS, ver §16.1 abaixo). Antes da Onda 2, zika era a doença que mais ganhava com cross — `dengue_casos_lag1` era a feature mais preditiva no SHAP global. Re-rodando a sensitivity com Onda 2 incorporada, **zika passou a perder −0.008 AUPRC com cross em média**, com 7 das 10 maiores quedas absolutas concentradas nessa doença. Detalhes e interpretação completa em §11 do RELATORIO_MODELAGEM.md. Mobilidade pendular contribuiu indiretamente: ao adicionar contexto estrutural sobre fluxo populacional, reduziu a unicidade do sinal indireto que vinha das features de dengue.
+
 ---
 
 ## 16. Internações por arbovirose pelo SUS (SIH-SUS) — adicionada em 2026-05-12
@@ -1107,11 +1117,15 @@ Top picos esperados: São Paulo capital em abr–mai/2024 (auge da maior epidemi
 
 `sih_internacoes_*` em t é uma **medida retrospectiva** (registra o que aconteceu no mês). Para virar feature preditiva de surto em t+1, usar com defasagem (lag 1, 2 ou 3 meses) e/ou médias móveis — segue a convenção das demais features do master, gerada por `src/arboviral/features/build_features.py`. Não substituir `internacoes` do SINAN, e sim coexistir como sinal complementar.
 
+### 16.1 Efeito sobre a hipótese cross-doença — sensitivity 2026-05-13
+
+SIH-SUS foi a fonte da Onda 2 que provavelmente mais alterou o veredicto sobre features cross-doença. As 4 colunas `sih_internacoes_{dengue,zika,chikungunya,febre_amarela}_lag1` carregam — sem prefixo de doença — sinal direto da pressão epidêmica de cada doença na rede hospitalar. Para zika em particular, isso substituiu o canal indireto que antes vinha via `dengue_casos_lag1` no SHAP global (ver §5 do RELATORIO_MODELAGEM.md). A sensitivity executada após Onda 2 mostrou que **zika perde −0.008 AUPRC com cross em média**, com 7 das 10 maiores quedas concentradas nessa doença. Detalhes em §11 do RELATORIO_MODELAGEM.md.
+
 ---
 
 # Próximos passos
 
-1. **Sensitivity analysis com `--no-cross`**: quantificar o ganho de incluir features cross-doença. (Hipótese: ganho substancial para zika; menor para dengue.)
+1. **Sensitivity analysis com `--no-cross`**: ✅ executada em 2026-05-13. Resultado contraintuitivo (cross atrapalha em zika pós-Onda 2; só RF mantém ganho positivo). Ver §11 do RELATORIO_MODELAGEM.md.
 2. **Hyperparameter tuning com Optuna** sobre fold de validação interna (atual usa defaults razoáveis). Esperar ganhos marginais (<5% AUPRC).
 3. **Calibração de probabilidades** (importante para uso em produção): atualmente modelos retornam probabilidades não-calibradas. Aplicar Platt scaling ou isotonic regression no fold de validação.
 4. **Framing alternativo para febre amarela**: anomaly detection (ex.: Isolation Forest sobre features climáticas + contexto).

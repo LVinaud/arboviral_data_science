@@ -15,7 +15,7 @@ Este documento organiza o que vem após a finalização do pipeline atual. Divid
 | 1.1 | Refatorar pipeline para salvar predições (`predictions.parquet`) e modelos treinados (`.joblib`) | 1 dia | ✅ feito (commit `fb0a289`) |
 | 1.2 | SHAP estratificado por perfil de município (clusters por IDH × população) | 1-2 dias | 📋 |
 | 1.3 | Análise de robustez (RQ3): simular dados faltantes 10/30/50% e medir queda de performance | 2-3 dias | 📋 |
-| 1.4 | Sensitivity analysis com `--no-cross`: quantificar ganho das features cross-doença | 1 dia | 📋 (flag presente, mascaramento ainda não implementado em `train.py`) |
+| 1.4 | Sensitivity analysis com `--no-cross`: quantificar ganho das features cross-doença | 1 dia | ✅ feito (2026-05-13). Achado contraintuitivo pós-Onda 2: zika perdeu −0.008 AUPRC com cross (antes era a doença mais beneficiada). Apenas Random Forest mantém ganho positivo (+0.017). Tabelas + interpretação em [RELATORIO_MODELAGEM.md §11](RELATORIO_MODELAGEM.md). Comparativo gerado por `arboviral.analyze_no_cross`. |
 | 1.5 | Hyperparameter tuning com Optuna nos top 3 modelos | 2-3 dias | 📋 |
 | 1.6 | Explicabilidade local para EBM e LogReg (não só árvores) | 0.5 dia | ✅ feito — `explicacao_local()` despacha por tipo de modelo (SHAP / coef×valor padronizado / `explain_local` nativo do EBM) |
 
@@ -53,7 +53,7 @@ Listadas em ordem decrescente de impacto esperado em AUPRC. Cada uma expande o p
 
 **Total**: dataset de 57 → **79 colunas** (+22 do master) e features de 117 → **140** (+23). Re-treino completo (315 combinações = 4 doenças × 4 definições × 7 modelos × ~3 folds) confirmou ganho relevante em zika (RF inc100: AUPRC 0.014 → 0.101 = **+640%**) e ganho moderado em dengue/chikungunya (~+0.02 a +0.03 nos top modelos). Detalhes em `RELATORIO_MODELAGEM.md` §3-4.
 
-**Ainda pendentes** (3 itens, em ordem de prioridade revisada): 1 (LIRAa, aguardando LAI à CCD-SP), 8 (eventos massivos), 10 (NDVI).
+**Ainda pendentes** (2 itens): 1 (LIRAa, aguardando LAI à CCD-SP), 10 (NDVI). O item original #8 (eventos massivos) foi descartado de comum acordo: definição ambígua de "evento massivo", ausência de portal único e custo de curadoria manual desproporcional ao ganho esperado para uma IC.
 
 **Onda 2 em andamento (2026-05-12)**:
 - #6 mobilidade pendular ✅ — 2 colunas em série temporal combinando vintages Censo 2010 (microdados, matriz O-D completa) e Censo 2022 (SIDRA tabela 10329, apenas saídas). `pendulares_entram_trabalho` em 2015–2021 + NaN em 2022–2025; `pendulares_saem_trabalho` cobre toda a série 2015–2025. Detalhes em AUDITORIA_DADOS.md §15.
@@ -138,11 +138,10 @@ Master: 79 → 85 colunas (+2 mobilidade, +4 SIH-SUS).
 
 ### 🥉 Top 8-10 — Impacto complementar
 
-#### 8. **Eventos massivos**
-- **O que adiciona**: flag binário "houve evento massivo no município/mês" (Carnaval, festas regionais, shows).
-- **Por que importa**: picos de mobilidade = picos de transmissão (especialmente dengue).
-- **Onde obter**: SECTUR municipais (manual), agendas culturais (Embratur).
-- **Esforço**: 1 semana (curadoria manual; pouco escalável)
+#### 8. ~~Eventos massivos~~ — DESCARTADO (2026-05-12)
+- Originalmente proposto como flag binário "houve evento massivo no município/mês" (Carnaval, festas, shows).
+- Removido do escopo: não há portal único nem padrão de curadoria; cada município publica em formato livre. Custo de curadoria manual desproporcional ao ganho esperado para uma IC.
+- Se eventualmente quisermos reaproveitar a hipótese, o caminho automatizável seria um flag de "mês de Carnaval/Semana Santa", derivado direto do calendário, sem precisar de curadoria municipal.
 
 #### 9. **Densidade populacional e uso urbano** ✅ CONCLUÍDO
 - **O que adiciona**: `area_km2`, `densidade_2023` (hab/km²).
@@ -163,7 +162,7 @@ Master: 79 → 85 colunas (+2 mobilidade, +4 SIH-SUS).
 
 - **LIRAa permanece como o "santo graal"** — agora único item do top 3 ainda pendente. Qualquer artigo sério em arboviroses cita LIRAa como variável-chave. Próximo a atacar.
 - ✅ **MapBiomas + ESF + vacinação FA** — concluídos. Confirmaram preencher lacunas estruturais: zika passou de "sem sinal" (AUPRC 0.014) para "modelo aprende" (0.101) com a entrada dessas fontes.
-- **Mobilidade pendular** e **eventos massivos** continuam difíceis mas podem virar diferencial se conseguirmos extrair.
+- ✅ **Mobilidade pendular** — concluída na Onda 2 com vintages 2010 + 2022 (ver §15 do AUDITORIA_DADOS).
 - ✅ **Latência SINAN** — concluído (era "fruta baixa"; mediana SP variou 3-7 dias por doença, com chikungunya como mais lento — coerente com o esperado).
 
 ---
@@ -292,9 +291,8 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 | **Médio** | 2.3 Cobertura ESF/APS | ✅ feito | API REST direta (sem Selenium); 132 meses harmonizados |
 | **Médio** | 2.4 Vacinação FA (PNI) | ✅ feito | Cobertura vacinal anual 1994-2026 — declínio observado de 94% (2002) → 74% (2025) |
 | **Médio** | 2.5 Latência SINAN | ✅ feito | Proxy direto de subnotificação (mediana 3-7d por doença) |
-| **Médio** | 2.6 Mobilidade pendular | 📋 | Espalhamento via deslocamento (IBGE Censo 2010/2022) |
-| **Médio** | 2.7 SIH-SUS internações | 📋 | Complementa SINAN; CID-10 A90/A91/A92 |
-| **Médio** | 2.8 Eventos massivos | 📋 | Picos de mobilidade (Carnaval, festas) — curadoria manual |
+| **Médio** | 2.6 Mobilidade pendular | ✅ feito | Espalhamento via deslocamento (Censo 2010 microdados + Censo 2022 SIDRA) |
+| **Médio** | 2.7 SIH-SUS internações | ✅ feito | Complementa SINAN; CID-10 A90/A91/A92.0/A92.5/A92.8/A95 |
 | **Médio** | 2.9 Densidade populacional | ✅ feito | Driver direto de transmissão urbana |
 | **Médio** | 2.10 NDVI mensal | 📋 | Sazonalidade vegetal (NASA APPEEARS / Earth Engine) |
 | **Longo** | 3.4 Validação externa MG | 📋 | Crítico para artigo sério |

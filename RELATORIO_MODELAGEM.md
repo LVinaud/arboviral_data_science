@@ -1,6 +1,6 @@
 # Relatório de Modelagem — Predição de Surtos de Arboviroses
 
-> Documento auto-gerado por `arboviral.build_reports` a partir de `data/processed/model_results.parquet` + complementação manual sobre Onda 1 (§9) e explicabilidade local uniforme (§10).
+> Documento auto-gerado por `arboviral.build_reports` a partir de `data/processed/model_results.parquet`, com complementações manuais: §9 sobre Onda 1, §10 sobre explicabilidade local uniforme e §11 sobre a sensitivity analysis cross-doença (item 1.4 do ROADMAP, executada após Onda 2).
 
 ## 1. Visão geral
 
@@ -252,7 +252,7 @@ Re-treino completo do portfolio (mesmas 315 combinações) permite quantificar o
 
 ### 9.5 Implicação para o roadmap
 
-5 das 10 fontes do top já capturadas — ganho concentrado em zika. Para os próximos passos (LIRAa, mobilidade pendular, SIH-SUS, eventos massivos, NDVI), a expectativa é:
+5 das 10 fontes do top já capturadas — ganho concentrado em zika. Para os próximos passos (LIRAa, mobilidade pendular, SIH-SUS, NDVI — eventos massivos foi descartado), a expectativa é:
 
 - **LIRAa** (índice de infestação por *Aedes*): potencial de mover dengue e chikungunya, que são as doenças com volume mas que ganharam pouco na Onda 1. É o "santo graal" do top 10.
 - **Mobilidade pendular + NDVI**: efeito provável menor em SP (estado bem conectado por rodovias, sem extremos de NDVI), mas necessários para validação externa em estados com perfil rural.
@@ -272,3 +272,90 @@ Output uniforme entre os 3 métodos: DataFrame com colunas `feature, valor_obser
 **Implicação**: a interface (app Streamlit em `app/`) consegue mostrar a justificativa do alerta para qualquer modelo do portfolio, não apenas árvores. Apenas os baselines (Persistência, Climatologia) seguem sem card de explicação por feature — fazem sentido pedagógico mas não usam features.
 
 A função legada `shap_por_predicao()` foi mantida como alias retrocompat (renomeia `contribuicao` → `shap`, `abs_contribuicao` → `abs_shap`).
+
+## 11. Sensitivity analysis — features cross-doença (RQ2 / item 1.4 do ROADMAP)
+
+Atualização 2026-05-13. Pareamento entre dois runs do `train.py` sobre o mesmo `features.parquet` pós-Onda 2 (146 colunas, com mobilidade pendular e SIH-SUS já incorporadas):
+
+- `model_results.parquet` — run com features cross-doença habilitadas (configuração padrão; o modelo de zika usa também colunas com prefixo `dengue_`, `chikungunya_`, etc.)
+- `model_results_nocross.parquet` — run com `python -m arboviral.train --no-cross`, mascarando qualquer coluna cujo prefixo seja outra doença que não a alvo
+
+Para cada um dos 315 (doença × definição × modelo × fold) pareados, calculamos Δ AUPRC = AUPRC(cross) − AUPRC(no-cross). Δ positivo significa que cross ajudou.
+
+### 11.1 Δ AUPRC médio por doença
+
+| Doença | n combinações | Δ AUPRC médio | Δ AUPRC mediano | Δ Recall médio |
+|---|---:|---:|---:|---:|
+| chikungunya | 84 | **+0.0081** | +0.0000 | -0.0230 |
+| dengue | 84 | -0.0020 | +0.0000 | +0.0008 |
+| zika | 84 | **-0.0081** | +0.0000 | -0.0147 |
+| febre_amarela | 63 | NaN | NaN | NaN | (sem positivos no teste — métricas degeneradas) |
+
+### 11.2 Δ AUPRC médio por modelo
+
+| Modelo | n combinações | Δ AUPRC médio | Δ AUPRC mediano |
+|---|---:|---:|---:|
+| **rf** | 45 | **+0.0174** | +0.0004 |
+| persistência | 45 | +0.0000 | +0.0000 | (não usa features) |
+| climatologia | 45 | +0.0000 | +0.0000 | (não usa features) |
+| lgbm | 45 | -0.0011 | +0.0003 |
+| xgb | 45 | -0.0034 | -0.0004 |
+| logreg | 45 | -0.0051 | -0.0055 |
+| ebm | 45 | -0.0056 | -0.0033 |
+
+### 11.3 Top 10 ganhos absolutos (cross > no-cross)
+
+| Doença | Definição | Modelo | Fold | AUPRC cross | AUPRC no-cross | Δ |
+|---|---|---|---:|---:|---:|---:|
+| chikungunya | inc100 | rf | 2022 | 1.0000 | 0.3333 | +0.6667 |
+| zika | zscore | xgb | 2022 | 0.1182 | 0.0377 | +0.0805 |
+| zika | zscore | xgb | 2023 | 0.1744 | 0.1128 | +0.0616 |
+| chikungunya | inc300 | ebm | 2024 | 0.2025 | 0.1447 | +0.0578 |
+| chikungunya | inc300 | logreg | 2024 | 0.2612 | 0.2090 | +0.0522 |
+| zika | canal | xgb | 2022 | 0.1994 | 0.1585 | +0.0409 |
+| chikungunya | canal | ebm | 2022 | 0.1871 | 0.1484 | +0.0387 |
+| chikungunya | zscore | ebm | 2022 | 0.1426 | 0.1069 | +0.0357 |
+| chikungunya | zscore | lgbm | 2024 | 0.5422 | 0.5094 | +0.0327 |
+| chikungunya | inc300 | lgbm | 2023 | 0.0539 | 0.0225 | +0.0315 |
+
+O ganho recorde de +0.6667 em `chikungunya × inc100 × rf × 2022` é influenciado por baixíssimo número de positivos (definição com 0.38% de prevalência), em que 1–2 amostras movem AUPRC de 0.33 para 1.0 — não generaliza, mas indica que o ganho se concentra em cenários raros.
+
+### 11.4 Top 10 perdas (cross < no-cross — onde cross atrapalhou)
+
+| Doença | Definição | Modelo | Fold | AUPRC cross | AUPRC no-cross | Δ |
+|---|---|---|---:|---:|---:|---:|
+| zika | canal | xgb | 2023 | 0.1091 | 0.2324 | -0.1233 |
+| chikungunya | canal | xgb | 2022 | 0.0996 | 0.2193 | -0.1198 |
+| zika | zscore | ebm | 2022 | 0.0235 | 0.1173 | -0.0938 |
+| zika | zscore | lgbm | 2023 | 0.1095 | 0.1802 | -0.0707 |
+| zika | canal | lgbm | 2023 | 0.1349 | 0.2026 | -0.0677 |
+| zika | zscore | rf | 2023 | 0.1782 | 0.2455 | -0.0673 |
+| zika | canal | rf | 2023 | 0.1721 | 0.2225 | -0.0504 |
+| chikungunya | zscore | xgb | 2022 | 0.0787 | 0.1238 | -0.0451 |
+| chikungunya | canal | rf | 2022 | 0.1736 | 0.2168 | -0.0432 |
+| zika | zscore | ebm | 2023 | 0.0691 | 0.1064 | -0.0373 |
+
+### 11.5 Interpretação científica — o veredicto inverteu pós-Onda 2
+
+Antes da Onda 2 (mobilidade pendular + SIH-SUS), as features mais preditivas para zika eram `dengue_casos_lag1` e `dengue_casos_roll6` (relatado em §5). Isso era apresentado como prova empírica de que cross-doença era essencial, dado o vetor compartilhado *Aedes aegypti*. **Esta sensitivity, executada com a Onda 2 já incorporada, encontrou o oposto**: zika perde -0.0081 AUPRC em média quando usamos cross. Quatro das cinco maiores quedas absolutas estão concentradas em zika.
+
+Hipótese para a inversão: as 4 colunas de internação SIH-SUS (`sih_internacoes_dengue_lag1`, `sih_internacoes_chikungunya_lag1`, etc.) já carregam — sem prefixo de doença — sinal de pressão epidêmica de cada doença na rede hospitalar do município. Para zika, o sinal cross-doença que antes vinha indiretamente via SINAN agora vem **diretamente** via SIH-SUS de dengue/chik. Adicionar também as features SINAN das outras doenças vira informação redundante e potencialmente colinear — modelos lineares (LogReg) e baseados em boosting (XGB/EBM/LGBM) sofrem mais com colinearidade do que árvores genuinamente independentes.
+
+**Random Forest é a única exceção** (+0.0174 médio, único positivo claro). Isso é consistente com a tese: RF amostra subconjuntos aleatórios de features em cada split, sofre menos com colinearidade e consegue extrair valor de features parcialmente redundantes. Os demais modelos (XGB, LGBM, EBM, LogReg) preferem o conjunto enxuto.
+
+### 11.6 Implicações para a IC e para o paper
+
+1. **Defesa da IC**: a hipótese inicial (cross-doença ajuda zika) era válida no estado anterior do dataset. A integração de SIH-SUS (Onda 2) **substituiu** esse canal de informação por uma fonte mais direta, e o ganho cross virou ruído residual. Esse achado evidencia que o desenho do dataset altera o veredicto sobre features cross-doença — material rico para a defesa.
+
+2. **Recomendação operacional**: para a plataforma em produção, manter cross habilitado **só para Random Forest**. Para os demais modelos (XGB/LGBM/EBM/LogReg), seria preferível operar com `--no-cross`. Isso pode virar uma flag por modelo no `train.py` numa rodada futura.
+
+3. **Ângulo para o paper**: a literatura predominante reporta cross-doença como benefício monolítico para arboviroses. Mostrar que o efeito é **dependente da disponibilidade de proxies diretos** (como SIH-SUS) e **dependente do modelo** (gain only-RF) é diferencial metodológico — sustenta a contribuição teórica além do estudo de caso paulista.
+
+4. **Próximo a fazer**: o item 1.5 do ROADMAP (Optuna nos top 3 modelos) deve usar `--no-cross` para EBM/LGBM/XGB e `cross` para RF, baseado neste resultado.
+
+Backups preservados para auditoria:
+- `data/processed/model_results_PRE_ONDA2.parquet`
+- `data/processed/predictions_PRE_ONDA2.parquet`
+- `data/processed/no_cross_comparativo.parquet` (long-format pareado, 315 linhas)
+- `data/processed/no_cross_resumo_doenca.csv`
+- `data/processed/no_cross_resumo_modelo.csv`

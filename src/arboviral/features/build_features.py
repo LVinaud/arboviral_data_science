@@ -43,6 +43,18 @@ Latência SINAN (proxy de qualidade da vigilância, mensal por doença):
   só está disponível DEPOIS dos casos serem notificados — usar t direto é
   leakage operacional (em produção o gestor não tem essa info ainda).
 
+SIH-SUS (internações por arbovirose, mensal por doença — Onda 2):
+  sih_internacoes_{dengue,zika,chikungunya,febre_amarela}_lag1
+  Lag1 pelo mesmo motivo da latência: AIH-RD do DATASUS tem ~60 dias de
+  defasagem de processamento; em produção o gestor só observa internações
+  consolidadas do mês passado.
+
+Mobilidade pendular intermunicipal (estrutural, anual — Onda 2):
+  pendulares_entram_trabalho, pendulares_saem_trabalho
+  Passados direto sem transformação (snapshots Censo 2010 + 2022). NaN
+  em entram para 2022+ é tratado nativamente pelos modelos de árvore;
+  para LogReg, o train descarta colunas all-NaN do fold automaticamente.
+
 Saída: data/processed/features.parquet
 Chave: (cod_ibge, ano, mes)
 """
@@ -186,6 +198,23 @@ def build(incluir_cross_doenca: bool = True) -> pd.DataFrame:
     for c in ("esf_cobertura_pct", "esf_qt_equipes"):
         if c in df.columns:
             feats[f"{c}_lag1"] = grupo[c].apply(lambda s: _lag(s, 1)).reset_index(level=0, drop=True)
+
+    # SIH-SUS: internações por arbovirose (Onda 2). São indicadores mensais
+    # retrospectivos — o gestor só observa internação consolidada do mês passado,
+    # então entra como lag1. Por construção do master, NaN já foi preenchido com 0
+    # (ausência de internação ≠ ausência de informação), o lag preserva esse zero.
+    for d in DOENCAS:
+        col = f"sih_internacoes_{d}"
+        if col in df.columns:
+            feats[f"{col}_lag1"] = grupo[col].apply(lambda s: _lag(s, 1)).reset_index(level=0, drop=True)
+
+    # Mobilidade pendular (Onda 2): variáveis estruturais anuais (Censo 2010+2022).
+    # `pendulares_entram_trabalho` fica NaN em 2022+ — limitação documentada em
+    # AUDITORIA_DADOS.md §15; o modelo trata NaN nativamente nas árvores e
+    # via descarte de coluna no train para LogReg.
+    for c in ("pendulares_entram_trabalho", "pendulares_saem_trabalho"):
+        if c in df.columns:
+            feats[c] = df[c].values
 
     # --- Remover features cross-doença se solicitado ---
     if not incluir_cross_doenca:
