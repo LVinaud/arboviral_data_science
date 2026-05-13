@@ -18,14 +18,20 @@ sidebar_footer fica DEPOIS de nav.run para garantir que aparece no fim.
 Uso:
     streamlit run app/app.py
 """
+from pathlib import Path
+
 import streamlit as st
 
 from i18n import language_selector, t
 from lib.tema import aplicar_tema, sidebar_footer
 
+# Favicon PNG monogram em verde do design system (sem emoji).
+# Gerado por scripts/gerar_favicon.py — basta re-executar para mudar a cor/letra.
+_FAVICON = Path(__file__).parent / "static" / "favicon.png"
+
 st.set_page_config(
     page_title=t("app.page_title"),
-    page_icon="🦟",
+    page_icon=str(_FAVICON) if _FAVICON.exists() else None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -33,19 +39,18 @@ st.set_page_config(
 aplicar_tema()
 language_selector()
 
-# Emojis em vez de :material/...: porque a fonte Material Symbols pode não
-# carregar (proxy/adblock/cache) e os ícones viram texto literal ("home",
-# "notifications") sobrepostos ao label. Emojis são glyphs Unicode garantidos
-# em qualquer sistema operacional.
+# Sidebar sem ícones — Material Symbols (`:material/...:`) foi tentado mas
+# a fonte do Google Fonts não carrega de forma confiável neste setup,
+# resultando no nome literal sobreposto ao label ("home", "info", etc).
+# Texto puro é mais limpo do que ícone quebrado.
 paginas = [
-    st.Page("screens/visao_geral.py", title=t("nav.visao_geral"),
-            icon="🏠", default=True),
-    st.Page("screens/alertas.py", title=t("nav.alertas"), icon="🔔"),
-    st.Page("screens/municipio.py", title=t("nav.municipio"), icon="🔎"),
-    st.Page("screens/mapa.py", title=t("nav.mapa"), icon="🗺️"),
-    st.Page("screens/comparativo.py", title=t("nav.comparativo"), icon="📊"),
-    st.Page("screens/sobre.py", title=t("nav.sobre"), icon="ℹ️"),
-    st.Page("screens/proximos_passos.py", title=t("nav.proximos_passos"), icon="🧭"),
+    st.Page("screens/visao_geral.py", title=t("nav.visao_geral"), default=True),
+    st.Page("screens/alertas.py", title=t("nav.alertas")),
+    st.Page("screens/municipio.py", title=t("nav.municipio")),
+    st.Page("screens/mapa.py", title=t("nav.mapa")),
+    st.Page("screens/comparativo.py", title=t("nav.comparativo")),
+    st.Page("screens/sobre.py", title=t("nav.sobre")),
+    st.Page("screens/proximos_passos.py", title=t("nav.proximos_passos")),
 ]
 
 nav = st.navigation(paginas)

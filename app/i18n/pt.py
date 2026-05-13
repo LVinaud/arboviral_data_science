@@ -335,12 +335,12 @@ STRINGS: dict = {
             "caption_pico": (
                 "Análise para {municipio} em {mes_humano} (mês de maior probabilidade no ano). "
                 "Probabilidade prevista: {prob}. "
-                "🔴 vermelho = empurrou para CIMA · 🟢 verde = empurrou para BAIXO."
+                "Barras vermelhas empurraram a probabilidade para CIMA; barras verdes, para BAIXO."
             ),
             "caption_mes": (
                 "Análise para {municipio} em {mes_humano}. "
                 "Probabilidade prevista: {prob}. "
-                "🔴 vermelho = empurrou para CIMA · 🟢 verde = empurrou para BAIXO."
+                "Barras vermelhas empurraram a probabilidade para CIMA; barras verdes, para BAIXO."
             ),
             "info_baseline": (
                 "Modelos de baseline ({modelo}) não têm features — "

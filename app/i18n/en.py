@@ -335,12 +335,12 @@ STRINGS: dict = {
             "caption_pico": (
                 "Analysis for {municipio} in {mes_humano} (highest-probability month of the year). "
                 "Predicted probability: {prob}. "
-                "🔴 red = pushed risk UP · 🟢 green = pushed risk DOWN."
+                "Red bars pushed risk UP; green bars pushed it DOWN."
             ),
             "caption_mes": (
                 "Analysis for {municipio} in {mes_humano}. "
                 "Predicted probability: {prob}. "
-                "🔴 red = pushed risk UP · 🟢 green = pushed risk DOWN."
+                "Red bars pushed risk UP; green bars pushed it DOWN."
             ),
             "info_baseline": (
                 "Baseline models ({modelo}) have no features — "

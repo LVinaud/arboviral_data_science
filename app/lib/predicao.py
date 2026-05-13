@@ -30,19 +30,21 @@ def justificar_alerta(modelo, features_municipio: pd.DataFrame, top: int = 5) ->
     return explicacao_local(modelo, features_municipio, top=top)
 
 
-def categorizar_risco(prob: float) -> tuple[str, str]:
-    """Categoriza probabilidade em (categoria_label, cor_emoji).
+def categorizar_risco(prob: float) -> str:
+    """Categoriza probabilidade em label de categoria de risco.
 
     Thresholds alinhados ao design system (lib/tema.py): 0.25 / 0.50 / 0.75.
+    A cor visual fica por conta do CSS (risk_badge / risk_legend) — esta função
+    devolve apenas o rótulo textual em PT/EN.
     """
     if prob >= 0.75:
-        return t("categorizar_risco.critico"), "🔴"
+        return t("categorizar_risco.critico")
     elif prob >= 0.50:
-        return t("categorizar_risco.alto"), "🟠"
+        return t("categorizar_risco.alto")
     elif prob >= 0.25:
-        return t("categorizar_risco.moderado"), "🟡"
+        return t("categorizar_risco.moderado")
     else:
-        return t("categorizar_risco.baixo"), "🟢"
+        return t("categorizar_risco.baixo")
 
 
 # Defaults preferidos para os selectboxes do app — uso prático mostrou que

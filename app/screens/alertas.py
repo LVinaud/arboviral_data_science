@@ -114,12 +114,7 @@ df = preds[
 ].copy()
 
 df = df.merge(municipios[["cod_ibge", "nome_municipio"]], on="cod_ibge", how="left")
-# zip(*serie_vazia) retorna [], que não pode ser unpacked em 2 — proteger o caso
-if df.empty:
-    df["categoria"] = []
-    df["emoji"] = []
-else:
-    df["categoria"], df["emoji"] = zip(*df["prob_predita"].apply(categorizar_risco))
+df["categoria"] = df["prob_predita"].apply(categorizar_risco)
 df = df.sort_values("prob_predita", ascending=False)
 
 # --- 4 métricas no topo ---
