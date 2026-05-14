@@ -701,6 +701,8 @@ STRINGS: dict = {
             "desastres": "Desastres / risco ambiental",
             "habitacao": "Habitação / favelas",
             "capag": "CAPAG",
+            "internacoes_sus": "Internações pelo SUS (SIH)",
+            "mobilidade": "Mobilidade pendular",
             "predicao_meta": "Metadata de predição",
             "outras": "Outras",
         },
@@ -721,6 +723,8 @@ STRINGS: dict = {
             "ibge_munic_2020": "IBGE MUNIC 2020",
             "ibge_censos": "IBGE — Censos 2010 / 2022",
             "tesouro": "Tesouro Nacional",
+            "datasus_sih": "DATASUS — SIH-SUS (AIH-RD)",
+            "ibge_censo_2010_2022": "IBGE — Censo 2010 (microdados) + Censo 2022 (SIDRA 10329)",
             "split_features": "engenharia de features (split)",
             "indef": "—",
         },
@@ -886,6 +890,16 @@ STRINGS: dict = {
         # Split
         "target_year": "Ano-alvo da predição",
         "target_month": "Mês-alvo da predição",
+        # SIH-SUS — internações por arbovirose (Onda 2). Entram com lag1 porque
+        # AIH-RD tem ~60 dias de defasagem no DATASUS — gestor só observa o
+        # consolidado do mês anterior.
+        "sih_internacoes_dengue_lag1": "Internações pelo SUS por dengue (mês anterior)",
+        "sih_internacoes_zika_lag1": "Internações pelo SUS por zika (mês anterior)",
+        "sih_internacoes_chikungunya_lag1": "Internações pelo SUS por chikungunya (mês anterior)",
+        "sih_internacoes_febre_amarela_lag1": "Internações pelo SUS por febre amarela (mês anterior)",
+        # Mobilidade pendular (Onda 2). Snapshots estruturais do Censo IBGE.
+        "pendulares_entram_trabalho": "Pendulares que entram (trabalho)",
+        "pendulares_saem_trabalho": "Pendulares que saem (trabalho)",
     },
 
     # Templates parametrizados para padrões de feature (lags, rolling, etc.)

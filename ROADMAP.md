@@ -15,7 +15,7 @@ Este documento organiza o que vem após a finalização do pipeline atual. Divid
 | 1.1 | Refatorar pipeline para salvar predições (`predictions.parquet`) e modelos treinados (`.joblib`) | 1 dia | ✅ feito (commit `fb0a289`) |
 | 1.2 | SHAP estratificado por perfil de município (clusters por IDH × população) | 1-2 dias | 📋 |
 | 1.3 | Análise de robustez (RQ3): simular dados faltantes 10/30/50% e medir queda de performance | 2-3 dias | 📋 |
-| 1.4 | Sensitivity analysis com `--no-cross`: quantificar ganho das features cross-doença | 1 dia | ✅ feito (2026-05-13). Achado contraintuitivo pós-Onda 2: zika perdeu −0.008 AUPRC com cross (antes era a doença mais beneficiada). Apenas Random Forest mantém ganho positivo (+0.017). Tabelas + interpretação em [RELATORIO_MODELAGEM.md §11](RELATORIO_MODELAGEM.md). Comparativo gerado por `arboviral.analyze_no_cross`. |
+| 1.4 | Sensitivity analysis com `--no-cross`: quantificar ganho das features cross-doença | 1 dia | ✅ feito (2026-05-14). Análise pareada PRE × POS-Onda 2 com Wilcoxon e pivot modelo×doença. Resultado: o ganho cross-doença robusto está concentrado em **RF × chikungunya** (+0.056 Δ AUPRC); os outros cenários flutuam pequeno e em geral neutro a desfavorável (efeito médio em zika é −0.005 a −0.008, p≈0.06–0.09). A interpretação anterior baseada em SHAP global ("cross é essencial pra zika") foi corrigida — SHAP mede importância dentro do modelo cross, sensitivity mede efeito real. Detalhes em [RELATORIO_MODELAGEM.md §11](RELATORIO_MODELAGEM.md). Comparativo gerado por `arboviral.analyze_no_cross --historico`. |
 | 1.5 | Hyperparameter tuning com Optuna nos top 3 modelos | 2-3 dias | 📋 |
 | 1.6 | Explicabilidade local para EBM e LogReg (não só árvores) | 0.5 dia | ✅ feito — `explicacao_local()` despacha por tipo de modelo (SHAP / coef×valor padronizado / `explain_local` nativo do EBM) |
 
@@ -177,7 +177,7 @@ Análise sincera do que falta para cada nível de publicação. Ordenados por di
 - ✅ Pipeline de dados completo e reproducível, com 5/10 fontes do top 10 integradas (Onda 1)
 - ✅ Comparação de 4 definições de surto (RQ4)
 - ✅ Análise de antecipação (recall em INICIO de surto) — achado central
-- ✅ SHAP cross-doença (zika previsto por features de dengue) — agora **quantitativamente reforçado pela Onda 1**: zika RF×inc100 passou de AUPRC 0.014 → 0.101 (+640%), confirmando que features ambientais (MapBiomas) + cobertura sanitária (ESF) + vacinação ampliam o sinal cross-doença
+- ✅ SHAP global em zika mostra `dengue_casos_lag1` e `dengue_casos_roll6` no topo. Onda 1 ainda elevou zika RF×inc100 de AUPRC 0.014 → 0.101 (+640%) — o ganho veio das fontes ambientais (MapBiomas) + cobertura sanitária (ESF) + vacinação. **A leitura anterior** ("cross-doença essencial") foi revisada pela sensitivity do item 1.4: SHAP global mede importância dentro do modelo cross, não substituibilidade. O ganho cross robusto está localizado em RF × chikungunya. Para zika, cross é levemente desfavorável em média (Δ AUPRC ≈ −0.005, p≈0.09). Ver §5 e §11 do RELATORIO_MODELAGEM.md.
 - ✅ Explicabilidade local UNIFORME entre todos os modelos do portfolio: árvores via SHAP, EBM via `explain_local` nativo (interpret-ml), LogReg via `coef × valor padronizado`. Output uniforme em `explicacao_local()` permite que a interface (app Streamlit) trate qualquer modelo igual.
 
 **Falta:**

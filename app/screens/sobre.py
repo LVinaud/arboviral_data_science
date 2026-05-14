@@ -51,6 +51,9 @@ _CATEGORIAS: list[tuple[str, list[str], str]] = [
     ("desastres", ["mgrd", "mmam"], "ibge_munic_2020"),
     ("habitacao", ["num_aglom_", "pop_aglom_", "num_favelas", "pop_favelas"], "ibge_censos"),
     ("capag", ["capag_"], "tesouro"),
+    # Onda 2 (2026-05): SIH-SUS e mobilidade pendular
+    ("internacoes_sus", ["sih_internacoes_"], "datasus_sih"),
+    ("mobilidade", ["pendulares_"], "ibge_censo_2010_2022"),
     ("predicao_meta", ["target_"], "split_features"),
 ]
 

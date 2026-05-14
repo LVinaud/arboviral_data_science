@@ -1031,7 +1031,7 @@ Cobertura no master: 100% para `saem` em todos os anos; 100% para `entram` nos a
 
 ### 15.2 Efeito sobre a hipótese cross-doença — sensitivity 2026-05-13
 
-Mobilidade pendular é uma das duas fontes da Onda 2 que mais alteram o veredicto da hipótese cross-doença (a outra é SIH-SUS, ver §16.1 abaixo). Antes da Onda 2, zika era a doença que mais ganhava com cross — `dengue_casos_lag1` era a feature mais preditiva no SHAP global. Re-rodando a sensitivity com Onda 2 incorporada, **zika passou a perder −0.008 AUPRC com cross em média**, com 7 das 10 maiores quedas absolutas concentradas nessa doença. Detalhes e interpretação completa em §11 do RELATORIO_MODELAGEM.md. Mobilidade pendular contribuiu indiretamente: ao adicionar contexto estrutural sobre fluxo populacional, reduziu a unicidade do sinal indireto que vinha das features de dengue.
+A sensitivity rigorosa (§11 do RELATORIO_MODELAGEM.md), com pareamento Δ AUPRC por (doença × definição × modelo × fold) e Wilcoxon, esclareceu que o "ganho cross-doença para zika" sugerido pelo SHAP global da §5 era uma leitura simplista — SHAP mede importância dentro do modelo cross, não substituibilidade. O efeito médio de cross em zika é levemente negativo nos dois estados do dataset: Δ AUPRC = −0.005 PRE-Onda 2 e −0.008 POS-Onda 2 (p≈0.06–0.09 no Wilcoxon, marginal). Mobilidade pendular **acentua** o efeito em ~0.003 a mais — não inverte. O ganho cross robusto está concentrado em **RF × chikungunya** (Δ ≈ +0.06).
 
 ---
 
@@ -1119,13 +1119,13 @@ Top picos esperados: São Paulo capital em abr–mai/2024 (auge da maior epidemi
 
 ### 16.1 Efeito sobre a hipótese cross-doença — sensitivity 2026-05-13
 
-SIH-SUS foi a fonte da Onda 2 que provavelmente mais alterou o veredicto sobre features cross-doença. As 4 colunas `sih_internacoes_{dengue,zika,chikungunya,febre_amarela}_lag1` carregam — sem prefixo de doença — sinal direto da pressão epidêmica de cada doença na rede hospitalar. Para zika em particular, isso substituiu o canal indireto que antes vinha via `dengue_casos_lag1` no SHAP global (ver §5 do RELATORIO_MODELAGEM.md). A sensitivity executada após Onda 2 mostrou que **zika perde −0.008 AUPRC com cross em média**, com 7 das 10 maiores quedas concentradas nessa doença. Detalhes em §11 do RELATORIO_MODELAGEM.md.
+SIH-SUS adiciona 4 colunas (`sih_internacoes_{dengue,zika,chikungunya,febre_amarela}_lag1`) que carregam — sem prefixo de doença — sinal direto da pressão epidêmica na rede hospitalar. A intuição inicial era que isso substituiria o canal indireto que vinha de `dengue_casos_lag1` para zika (ver §5 do RELATORIO_MODELAGEM.md). A sensitivity rigorosa do item 1.4 (§11 do RELATORIO_MODELAGEM.md) **mostrou que essa substituição é pequena**: o Δ AUPRC pareado em zika foi −0.0055 PRE-Onda 2 e −0.0081 POS-Onda 2 — uma piora marginal de ~0.003 atribuível à Onda 2, não uma "inversão" de hipótese. Para zika, o efeito médio de cross-doença sempre foi pequeno e marginalmente significativo (p≈0.06–0.09 no Wilcoxon). O único ganho cross robusto observado é em **RF × chikungunya** (Δ ≈ +0.056), praticamente inalterado pela Onda 2.
 
 ---
 
 # Próximos passos
 
-1. **Sensitivity analysis com `--no-cross`**: ✅ executada em 2026-05-13. Resultado contraintuitivo (cross atrapalha em zika pós-Onda 2; só RF mantém ganho positivo). Ver §11 do RELATORIO_MODELAGEM.md.
+1. **Sensitivity analysis com `--no-cross`**: ✅ executada em 2026-05-14. Análise pareada PRE × POS-Onda 2 com Wilcoxon e pivot modelo×doença. Achado principal: ganho cross-doença robusto está localizado em RF × chikungunya (+0.056); efeitos em zika e dengue são pequenos e marginalmente significativos. A interpretação anterior baseada apenas em SHAP global foi corrigida. Ver §5 (revisada) e §11 do RELATORIO_MODELAGEM.md.
 2. **Hyperparameter tuning com Optuna** sobre fold de validação interna (atual usa defaults razoáveis). Esperar ganhos marginais (<5% AUPRC).
 3. **Calibração de probabilidades** (importante para uso em produção): atualmente modelos retornam probabilidades não-calibradas. Aplicar Platt scaling ou isotonic regression no fold de validação.
 4. **Framing alternativo para febre amarela**: anomaly detection (ex.: Isolation Forest sobre features climáticas + contexto).

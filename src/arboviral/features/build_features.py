@@ -100,7 +100,19 @@ def _trend(s: pd.Series, w: int) -> pd.Series:
     return s.shift(1).rolling(w, min_periods=2).apply(slope, raw=False)
 
 
-def build(incluir_cross_doenca: bool = True) -> pd.DataFrame:
+def build(incluir_cross_doenca: bool = True,
+          incluir_onda2: bool = True) -> pd.DataFrame:
+    """Constrói features.parquet.
+
+    Args:
+        incluir_cross_doenca: se False, sinaliza ao train.py para mascarar
+            colunas com prefixo de outra doença (no build em si nada muda —
+            cross-doença é responsabilidade do train).
+        incluir_onda2: se False, NÃO inclui as 6 colunas da Onda 2
+            (sih_internacoes_*_lag1, pendulares_*). Usado para reproduzir
+            o estado do dataset PRE-Onda 2 e fazer sensitivity histórica
+            (ver §11 do RELATORIO_MODELAGEM.md). Padrão True.
+    """
     print("Carregando municipio_mes.parquet e labels.parquet...", flush=True)
     master = pd.read_parquet(PROCESSED / "municipio_mes.parquet")
     labels = pd.read_parquet(PROCESSED / "labels.parquet")
@@ -199,22 +211,29 @@ def build(incluir_cross_doenca: bool = True) -> pd.DataFrame:
         if c in df.columns:
             feats[f"{c}_lag1"] = grupo[c].apply(lambda s: _lag(s, 1)).reset_index(level=0, drop=True)
 
-    # SIH-SUS: internações por arbovirose (Onda 2). São indicadores mensais
-    # retrospectivos — o gestor só observa internação consolidada do mês passado,
-    # então entra como lag1. Por construção do master, NaN já foi preenchido com 0
-    # (ausência de internação ≠ ausência de informação), o lag preserva esse zero.
-    for d in DOENCAS:
-        col = f"sih_internacoes_{d}"
-        if col in df.columns:
-            feats[f"{col}_lag1"] = grupo[col].apply(lambda s: _lag(s, 1)).reset_index(level=0, drop=True)
+    # Colunas da Onda 2 (SIH-SUS + mobilidade pendular). Quando incluir_onda2
+    # for False, pulamos todas elas para reproduzir o features.parquet pré-Onda 2
+    # — necessário para a sensitivity histórica documentada em §11 do relatório.
+    if incluir_onda2:
+        # SIH-SUS: internações por arbovirose (Onda 2). São indicadores mensais
+        # retrospectivos — o gestor só observa internação consolidada do mês
+        # passado, então entra como lag1. Por construção do master, NaN já foi
+        # preenchido com 0 (ausência de internação ≠ ausência de informação),
+        # o lag preserva esse zero.
+        for d in DOENCAS:
+            col = f"sih_internacoes_{d}"
+            if col in df.columns:
+                feats[f"{col}_lag1"] = grupo[col].apply(lambda s: _lag(s, 1)).reset_index(level=0, drop=True)
 
-    # Mobilidade pendular (Onda 2): variáveis estruturais anuais (Censo 2010+2022).
-    # `pendulares_entram_trabalho` fica NaN em 2022+ — limitação documentada em
-    # AUDITORIA_DADOS.md §15; o modelo trata NaN nativamente nas árvores e
-    # via descarte de coluna no train para LogReg.
-    for c in ("pendulares_entram_trabalho", "pendulares_saem_trabalho"):
-        if c in df.columns:
-            feats[c] = df[c].values
+        # Mobilidade pendular (Onda 2): variáveis estruturais anuais (Censo 2010+2022).
+        # `pendulares_entram_trabalho` fica NaN em 2022+ — limitação documentada em
+        # AUDITORIA_DADOS.md §15; o modelo trata NaN nativamente nas árvores e
+        # via descarte de coluna no train para LogReg.
+        for c in ("pendulares_entram_trabalho", "pendulares_saem_trabalho"):
+            if c in df.columns:
+                feats[c] = df[c].values
+    else:
+        print("Pulando colunas da Onda 2 (--exclude-onda2)...", flush=True)
 
     # --- Remover features cross-doença se solicitado ---
     if not incluir_cross_doenca:
@@ -243,10 +262,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-cross", action="store_true",
                         help="(no momento, sem efeito — flag preservada para train.py)")
+    parser.add_argument("--exclude-onda2", action="store_true",
+                        help="Não inclui as 6 colunas da Onda 2 (sih_internacoes_* + "
+                             "pendulares_*); reproduz o features.parquet pré-Onda 2 "
+                             "para sensitivity histórica.")
+    parser.add_argument("--saida", default=None,
+                        help="Caminho de saída customizado (padrão: data/processed/features.parquet)")
     args = parser.parse_args()
 
-    feats = build(incluir_cross_doenca=not args.no_cross)
-    out = PROCESSED / "features.parquet"
+    feats = build(
+        incluir_cross_doenca=not args.no_cross,
+        incluir_onda2=not args.exclude_onda2,
+    )
+    out = (PROCESSED / "features.parquet") if args.saida is None else __import__("pathlib").Path(args.saida)
     out.parent.mkdir(parents=True, exist_ok=True)
     feats.to_parquet(out, index=False)
     print(f"\nGravado {len(feats):,} linhas × {len(feats.columns)} colunas em {out}")

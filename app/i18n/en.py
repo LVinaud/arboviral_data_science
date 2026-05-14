@@ -708,6 +708,8 @@ STRINGS: dict = {
             "desastres": "Disasters / environmental risk",
             "habitacao": "Housing / favelas",
             "capag": "CAPAG",
+            "internacoes_sus": "SUS hospital admissions (SIH)",
+            "mobilidade": "Commuting mobility",
             "predicao_meta": "Prediction metadata",
             "outras": "Other",
         },
@@ -728,6 +730,8 @@ STRINGS: dict = {
             "ibge_munic_2020": "IBGE MUNIC 2020",
             "ibge_censos": "IBGE — Censuses 2010 / 2022",
             "tesouro": "Brazilian National Treasury",
+            "datasus_sih": "DATASUS — SIH-SUS (AIH-RD)",
+            "ibge_censo_2010_2022": "IBGE — Census 2010 microdata + Census 2022 (SIDRA 10329)",
             "split_features": "feature engineering (split)",
             "indef": "—",
         },
@@ -894,6 +898,16 @@ STRINGS: dict = {
         # Split
         "target_year": "Target year of prediction",
         "target_month": "Target month of prediction",
+        # SIH-SUS — SUS hospital admissions for arboviruses (Wave 2). Used at
+        # lag1 because AIH-RD has ~60-day lag in DATASUS — the manager only
+        # observes the consolidated value from the previous month.
+        "sih_internacoes_dengue_lag1": "SUS admissions for dengue (previous month)",
+        "sih_internacoes_zika_lag1": "SUS admissions for zika (previous month)",
+        "sih_internacoes_chikungunya_lag1": "SUS admissions for chikungunya (previous month)",
+        "sih_internacoes_febre_amarela_lag1": "SUS admissions for yellow fever (previous month)",
+        # Commuting mobility (Wave 2). Structural snapshots from IBGE Census.
+        "pendulares_entram_trabalho": "Inbound commuters (work)",
+        "pendulares_saem_trabalho": "Outbound commuters (work)",
     },
 
     # Parametrized templates for feature patterns
