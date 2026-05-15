@@ -144,11 +144,22 @@ Todos os modelos ML usam `class_weight='balanced'` (XGBoost via `scale_pos_weigh
 
 **Treino e análise:**
 ```bash
-python -m arboviral.train                # treina 4 doenças × 4 definições × 7 modelos × 3 folds
+python -m arboviral.train                # treina 4 doenças × 4 definições × 7 modelos × 3 folds (defaults)
+python -m arboviral.train --no-cross     # mesma coisa, sem features cross-doença (sensitivity §11)
 python -m arboviral.analyze_results       # gera tabelas-resumo (AUPRC por combinação, ranking, etc.)
+python -m arboviral.analyze_no_cross --historico   # PRE × POS-Onda 2 com Wilcoxon (item 1.4)
+python -m arboviral.tune_optuna           # 15 estudos × 100 trials cada (item 1.5; ~10h CPU)
+python -m arboviral.train_tuned           # aplica best_params nos 3 folds oficiais
+python -m arboviral.analyze_thresholds    # sweep precision×recall por threshold (§13)
+python -m arboviral.build_reports         # consolida RELATORIO_MODELAGEM.md
 ```
 
-Saída: `data/processed/model_results.parquet` (uma linha por combinação) + tabelas CSV.
+Saídas principais em `data/processed/`:
+- `model_results.parquet` — métricas defaults
+- `model_results_TUNED.parquet` — métricas após tuning Optuna
+- `predictions.parquet` — uma linha por amostra de teste (análises post-hoc)
+- `optuna_studies/*.db` — histórico completo de cada trial (auditável)
+- `tuning_comparison.csv` — pivot default × tuned com Δ AUPRC
 
 ### Resultados — primeira rodada completa
 
@@ -222,9 +233,9 @@ A narrativa para o relatório/artigo é forte: **ao adicionar fontes ambientais 
 
 ### Próximas etapas
 
-1. **Sensitivity analysis com `--no-cross`**: quantificar o ganho de incluir features cross-doença (mascaramento ainda placeholder em `train.py`)
-2. **Hyperparameter tuning** com Optuna (atual usa defaults)
-3. **Calibração de probabilidades** (importante para uso em produção)
+1. ✅ **Sensitivity analysis com `--no-cross`** (2026-05-14): ganho cross-doença concentrado em RF×chikungunya (+0.056 Δ AUPRC); demais cenários flutuam pequeno. Detalhes em [`RELATORIO_MODELAGEM.md` §11](RELATORIO_MODELAGEM.md).
+2. ✅ **Hyperparameter tuning Optuna** (2026-05-15): 15 estudos × 100 trials. Defaults já estão ~no teto: melhor cenário do projeto subiu de 0.795 (RF default) → 0.798 (LGBM tuned, dengue×inc100). Em chik/zika, tuning piorou por overfit ao fold 2021. Detalhes em [`RELATORIO_MODELAGEM.md` §12](RELATORIO_MODELAGEM.md).
+3. **Calibração de probabilidades** (importante para uso em produção) — pendente, listado em ROADMAP §3.2 (rumo a conferência)
 4. **Plataforma**: interface integrada à inteli.gente, exibindo top features para cada alerta. App Streamlit funcional em `app/` — design system completo, 7 telas (Visão geral, Alertas, Município, Mapa, Comparativo, Variáveis, Sobre), interface bilíngue PT/EN (toggle no topo da sidebar; ver [`app/i18n/README.md`](app/i18n/README.md)), explicabilidade local para todos os modelos do portfolio (não apenas árvores).
 5. **Fontes restantes do top 10** (após Onda 2): LIRAa (#1 — pausado, aguardando LAI à CCD-SP) e NDVI (#10 — sazonalidade vegetal via Earth Engine). O item original #8 (eventos massivos) foi descartado por inviabilidade prática (curadoria manual desproporcional ao ganho).
 6. Trabalho futuro: MEM (L5) via ponte R, framing alternativo para FA (anomaly detection).

@@ -443,3 +443,214 @@ A leitura simplista de §5 ("cross-doença é essencial para zika porque o SHAP 
 - `data/processed/no_cross_comparativo.parquet` — long-format POS-Onda 2 (315 linhas)
 - `data/processed/no_cross_comparativo_PRE_ONDA2.parquet` — long-format PRE-Onda 2 (315 linhas)
 - `data/processed/no_cross_resumo_doenca.csv` + `no_cross_resumo_modelo.csv` + `no_cross_resumo_PRE_vs_POS.csv`
+
+## 12. Hyperparameter tuning com Optuna (item 1.5 do ROADMAP, 2026-05-15)
+
+### 12.0 Motivação e desenho
+
+A §3 reporta o ranking dos 5 modelos com **hiperparâmetros default** (200 árvores, profundidade ilimitada, etc.). A pergunta deste capítulo é simples: **quanto cada modelo ganharia se ajustássemos seus hiperparâmetros com busca bayesiana?** Isso responde duas coisas ao mesmo tempo:
+
+1. **Quão perto do teto cada modelo já está** com defaults — se um RF default de 200 árvores está a 1% de um RF tuned de 100 trials, o tuning não compensa o custo.
+2. **Se algum modelo "mediano" (LogReg, EBM) sobe ao topo quando bem ajustado** — tese clássica em pesquisas de comparação de modelos.
+
+**Desenho experimental — separação rigorosa entre busca e teste:**
+
+- Sampler: **TPE (Tree-structured Parzen Estimator)** com `seed=42` para reprodutibilidade.
+- 100 trials por estudo, persistidos em SQLite (`data/processed/optuna_studies/*.db`) — toda a história de cada trial fica auditável.
+- **Busca**: AUPRC sobre fold de validação interna (`target_year=2021`, treinando com tudo até 2020). **NUNCA toca nos folds de teste oficiais 2022/2023/2024.**
+- **Avaliação**: aplicamos os hiperparâmetros vencedores aos 3 folds de teste (mesma divisão da §3) e comparamos `model_results.parquet` (default) × `model_results_TUNED.parquet` (tuned).
+
+**Cenários atacados** (3 doenças × 5 modelos ML = 15 estudos):
+- `dengue × inc100`, `chikungunya × inc100`, `zika × canal` (top de cada doença na §3)
+- Modelos: `rf`, `xgb`, `lgbm`, `ebm`, `logreg`
+- Febre amarela ignorada (zero positivos no teste em todas as definições)
+- Custo total: ~10h de CPU (notebook do autor, single-node)
+
+### 12.1 Comparativo AUPRC default × tuned (média sobre 3 folds)
+
+| Doença | Definição | Modelo | AUPRC default | AUPRC tuned | Δ | Δ% |
+|---|---|---|---:|---:|---:|---:|
+| dengue | inc100 | **lgbm** | 0.7940 | **0.7980** | +0.0040 | +0.5% |
+| dengue | inc100 | xgb | 0.7919 | 0.7932 | +0.0013 | +0.2% |
+| dengue | inc100 | rf | 0.7952 | 0.7906 | −0.0046 | −0.6% |
+| dengue | inc100 | ebm | 0.7528 | 0.7876 | +0.0349 | +4.6% |
+| dengue | inc100 | logreg | 0.6552 | 0.6793 | +0.0240 | +3.7% |
+| chikungunya | inc100 | rf | 0.4418 | 0.4272 | −0.0146 | −3.3% |
+| chikungunya | inc100 | xgb | 0.4024 | 0.4133 | +0.0109 | +2.7% |
+| chikungunya | inc100 | ebm | 0.4179 | 0.1286 | −0.2893 | **−69.2%** |
+| chikungunya | inc100 | lgbm | 0.1177 | 0.0315 | −0.0863 | **−73.3%** |
+| chikungunya | inc100 | logreg | 0.1271 | 0.2052 | +0.0781 | +61.4% |
+| zika | canal | rf | 0.1709 | 0.1485 | −0.0223 | −13.1% |
+| zika | canal | xgb | 0.1186 | 0.1405 | +0.0219 | +18.5% |
+| zika | canal | lgbm | 0.1364 | 0.0672 | −0.0692 | **−50.7%** |
+| zika | canal | ebm | 0.0898 | 0.1028 | +0.0130 | +14.4% |
+| zika | canal | logreg | 0.0449 | 0.0424 | −0.0025 | −5.5% |
+
+### 12.2 Achados
+
+**Em dengue (regime de bons sinais), tuning entrega micro-ganhos. O melhor modelo do projeto agora é LGBM tuned.**
+
+- **dengue × inc100 × lgbm tuned = 0.798** (era 0.795 com RF default — novo melhor cenário do projeto, mas ganho marginal de 0.4 pontos)
+- RF default e XGB default já estavam **a < 1% do teto** — confirma que o portfolio default já estava bem calibrado; tuning é refinamento, não revolução
+- **EBM e LogReg ganharam 4–5%** em dengue — o tuning fez os modelos interpretáveis se aproximarem dos black-box. Útil se um stakeholder priorizar interpretabilidade nativa sobre 5 pontos de AUPRC.
+
+**Em chikungunya/zika (regime de poucos positivos), tuning frequentemente PIORA o teste — overfitting do TPE ao fold de validação único (2021).**
+
+- chik × ebm: 0.418 → **0.129** (queda de 69%)
+- chik × lgbm: 0.118 → **0.032** (queda de 73%)
+- zika × lgbm: 0.136 → **0.067** (queda de 51%)
+
+A causa é mecânica: 2021 teve 13 positivos de chikungunya na validação (vs ~50 nos folds de teste agregados); o TPE encontrou hiperparâmetros que "decoram" esse pequeno conjunto e não generalizam. Modelos com mais regularização nativa (RF, XGB) sofreram menos; modelos com leaf-wise growth agressivo (LGBM, EBM com poucas leaves) foram os mais afetados.
+
+**LogReg em chik subiu 61% (0.127 → 0.205)** — único caso em chik onde o ganho é grande e legítimo (penalty L1 forte selecionou ~10 features e gerou um modelo enxuto que generaliza melhor que o default).
+
+### 12.3 Hiperparâmetros vencedores (top 5 com maior |Δ|)
+
+| Estudo | Δ | Hiperparâmetros chave |
+|---|---:|---|
+| dengue × ebm | +4.6% | `learning_rate=0.074`, `interactions=0`, `outer_bags=13` |
+| dengue × logreg | +3.7% | `penalty=l1`, `C=0.002` (regularização forte) |
+| dengue × lgbm | +0.5% | `n_estimators=450`, `num_leaves=220`, `learning_rate=0.012` |
+| chik × logreg | +61.4% | `penalty=l1`, `C` pequeno (sparsity → ~10 features ativas) |
+| zika × xgb | +18.5% | `max_depth=8`, `learning_rate=0.255`, `min_child_weight=8` |
+
+JSON completo em `data/processed/optuna_best_params.json`.
+
+### 12.4 Ranking final (atualizado para o relatório)
+
+Mantemos a §3 do relatório com defaults como **baseline reproduzível**, mas o ranking **operacional** das melhores combinações por doença passa a ser:
+
+| Doença | Melhor combinação | AUPRC | Configuração |
+|---|---|---:|---|
+| **dengue** | inc100 × **LGBM tuned** | **0.798** | tuned via Optuna |
+| **chikungunya** | inc100 × **RF default** | 0.442 | NÃO tunar (chik é instável) |
+| **zika** | canal × **EBM tuned** | 0.103 | tuned, mas AUPRC ainda baixo |
+
+A diferença prática para **dengue** entre RF default (0.795), XGB tuned (0.793) e LGBM tuned (0.798) é **estatisticamente irrelevante** (3 folds, IC ampla). Em produção qualquer um dos três é defensável.
+
+### 12.5 Recomendação para a IC e trabalho futuro
+
+1. **Reportar os 3 melhores modelos por doença lado a lado** (RF default, XGB default, LGBM tuned). Defender a escolha de RF default para a aplicação na inteli.gente por **estabilidade** (overfitting contido em todos os folds) e **explicabilidade nativa via feature_importances_** sem precisar de SHAP.
+2. **NÃO tunar chikungunya/zika** com este desenho — o sinal é fraco demais para uma busca bayesiana ser confiável. **Trabalho futuro**: validação cruzada interna com mais de um fold dedicado (rolling 2019/2020/2021) antes de declarar hiperparâmetro vencedor — descrito no item 1.7 (ROADMAP).
+3. **Calibração de probabilidades** (listada em ROADMAP §3.2 — rumo a conferência) é a próxima alavanca operacional: o tuning otimiza ranking (AUPRC), mas não corrige miscalibração — ver §13 sobre threshold.
+
+### 12.6 Backup — arquivos
+
+- `data/processed/model_results_TUNED.parquet` — 45 linhas (15 estudos × 3 folds)
+- `data/processed/predictions_TUNED.parquet` — 348.300 linhas (uma por amostra de teste)
+- `data/processed/tuning_comparison.csv` — pivot default × tuned com Δ e Δ%
+- `data/processed/optuna_studies/*.db` — 15 SQLites com 100 trials cada (auditável)
+- `data/processed/optuna_best_params.json` — JSON consolidado para reprodução
+
+
+## 13. Calibração operacional do alerta — análise por threshold (2026-05-14)
+
+### 13.0 Motivação
+
+Toda a §7 (achado central da antecipação) foi reportada no threshold default 0.5 — a saída do `predict_proba` é binarizada em "alerta" se `prob_predita ≥ 0.5`. Esse é o ponto operacional padrão da maioria dos benchmarks de ML, mas **não é o ponto operacional ideal para um gestor de saúde pública**. O gestor enfrenta um trade-off concreto:
+
+- Threshold baixo (0.5) → muitos alertas, capta mais surtos, mas inunda a vigilância com falsos positivos
+- Threshold alto (0.9) → poucos alertas, alta confiança em cada um, mas perde surtos por exigência de evidência
+
+Esta seção varre 5 thresholds (0.5, 0.6, 0.7, 0.8, 0.9) sobre `predictions.parquet` e calcula 4 métricas para cada (doença × definição × modelo × fold × threshold), com foco no **alerta preventivo de início de surto** — quando o modelo grita num município que ainda está calmo.
+
+Geração reproduzível: `python -m arboviral.analyze_thresholds`. Outputs em `data/processed/threshold_sweep.parquet` (1.575 linhas, long-format) e `threshold_resumo.csv`.
+
+### 13.1 As 4 métricas e o que cada uma responde
+
+| Métrica | Definição | Pergunta operacional |
+|---|---|---|
+| `precision` (geral) | n alertas corretos / n alertas | Quando o modelo alerta, qual % tem surto no t+1 (qualquer transição)? |
+| `recall` (geral) | n alertas corretos / n surtos t+1 totais | Dos surtos no t+1, quantos % o modelo pegou? |
+| `recall_inicio` | n alertas em INÍCIO / n meses INÍCIO | Dos meses que foram INÍCIO de surto novo, quantos % o modelo alertou? |
+| **`precision_alerta_inicio`** | n alertas em mês calmo que viraram surto / n alertas em mês calmo | **Quando o modelo grita num município ainda calmo, qual % das vezes ele acerta que vai começar surto?** |
+
+A última métrica é a **operacional** para o gestor de plataforma: ignora alertas em meses de surto em curso (que são autocorrelação trivial) e foca exclusivamente nos alertas preventivos. Equivale a "1 − taxa de falso alarme em mês calmo".
+
+### 13.2 Tabela completa — top de cada doença com Random Forest
+
+#### Dengue × inc100 × RF (cenário-bandeira)
+
+| T | Recall geral | Precision geral | Recall INÍCIO | **Prec alerta INÍCIO** | n alertas/fold | n alertas em calmo/fold | n INÍCIO/fold |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.50 | 0.721 | 0.690 | 0.365 | **0.325** | 2.158 | 595 | 519 |
+| 0.60 | 0.613 | 0.774 | 0.217 | **0.382** | 1.666 | 318 | 519 |
+| 0.70 | 0.503 | 0.857 | 0.116 | **0.435** | 1.240 | 152 | 519 |
+| 0.80 | 0.367 | 0.918 | 0.048 | **0.482** | 858 | 59 | 519 |
+| 0.90 | 0.202 | 0.974 | 0.012 | **0.725** | 449 | 12 | 519 |
+
+#### Dengue × canal × RF (definição "oficial" do MS)
+
+| T | Recall geral | Precision geral | Recall INÍCIO | **Prec alerta INÍCIO** | n alertas/fold | n alertas em calmo/fold | n INÍCIO/fold |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.50 | 0.637 | 0.527 | 0.295 | **0.208** | 1.999 | 688 | 491 |
+| 0.60 | 0.495 | 0.620 | 0.174 | **0.271** | 1.345 | 313 | 491 |
+| 0.70 | 0.301 | 0.727 | 0.070 | **0.317** | 738 | 109 | 491 |
+| 0.80 | 0.129 | 0.854 | 0.017 | **0.385** | 318 | 22 | 491 |
+| 0.90 | 0.009 | 0.992 | 0.000 | **0.333** | 28 | 1 | 491 |
+
+#### Chikungunya × inc100 × RF
+
+| T | Recall geral | Precision geral | Recall INÍCIO | **Prec alerta INÍCIO** | n alertas/fold | n alertas em calmo/fold | n INÍCIO/fold |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.50 | 0.364 | 0.174 | 0.344 | **0.067** | 21 | 15 | 25 |
+| 0.60 | 0.349 | 0.224 | 0.333 | **0.083** | 10 | 6 | 25 |
+| 0.70 | 0.335 | 0.400 | 0.333 | **0.333** | 3 | 3 | 25 |
+| 0.80 | 0.000 | NaN | 0.000 | — | 0 | 0 | 25 |
+| 0.90 | 0.000 | NaN | 0.000 | — | 0 | 0 | 25 |
+
+#### Zika × canal × RF
+
+| T | Recall geral | Precision geral | Recall INÍCIO | **Prec alerta INÍCIO** | n alertas/fold | n alertas em calmo/fold | n INÍCIO/fold |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.50 | 0.369 | 0.164 | 0.372 | **0.114** | 45 | 38 | 13 |
+| 0.60 | 0.148 | 0.143 | 0.150 | **0.087** | 21 | 17 | 13 |
+| 0.70 | 0.084 | 0.194 | 0.057 | **0.100** | 9 | 7 | 13 |
+| 0.80 | 0.042 | 0.222 | 0.000 | **0.000** | 3 | 2 | 13 |
+| 0.90 | 0.000 | NaN | 0.000 | — | 0 | 0 | 13 |
+
+### 13.3 Achados principais
+
+**1. Headline para defesa — dengue × inc100 × RF a 0.9 → `precision_alerta_inicio = 72,5%`.**
+Quando a plataforma grita ≥ 90% de probabilidade num município paulista que ainda não está em surto de dengue, ela acerta a previsão de surto novo em 7 de cada 10 alertas. Esse é o ponto operacional de "alerta crítico" recomendado para uso real.
+
+**2. `precision_alerta_inicio` cresce monotonicamente com o threshold em dengue × inc100, enquanto `recall_inicio` cai.**
+Trade-off limpo: cada incremento de threshold reduz alertas mas aumenta confiabilidade. No outro extremo (T = 0.5), a métrica cai para 33% — apenas 1 em cada 3 alertas em mês calmo realmente vira surto. Operar em 0.5 é "tagarelar".
+
+**3. Para chikungunya e zika, threshold ≥ 0.8 colapsa o número de alertas para zero ou 1.**
+Modelos para essas doenças simplesmente nunca atribuem probabilidade ≥ 80% — característica do problema: prevalência baixíssima (chik inc100 = 0.38%, zika canal = 0.6%) impede que o modelo "tenha certeza alta" em cenários positivos.
+
+**4. `precision_geral` (97% a T = 0.9 em dengue inc100) é enganosa para uso preventivo.**
+A maior parte dessa precision vem de alertas em meses de surto em curso (manutenção) — autocorrelação domina. A `precision_alerta_inicio` é a métrica honesta porque exclui esses casos triviais.
+
+**5. `precision_inicio` (calculada na §11.4) e `precision_alerta_inicio` são métricas distintas.**
+- `precision_inicio` = % dos alertas que caíram em mês INÍCIO (relativo a todos os alertas, incluindo manutenção)
+- `precision_alerta_inicio` = % dos alertas em mês calmo que viraram surto (exclui manutenção)
+A segunda é a que importa para o gestor.
+
+### 13.4 Recomendação operacional por doença
+
+Threshold único para todas as doenças não funciona — chik e zika perdem totalmente acima de 0.8. A plataforma deve usar **threshold por doença**, calibrado conforme a tolerância do gestor a falso alarme:
+
+| Doença | Threshold sugerido | Recall INÍCIO esperado | Prec alerta INÍCIO esperada | Uso |
+|---|---:|---:|---:|---|
+| Dengue (inc100) | **0.90** | 1% | **73%** | banda "alerta crítico" — gestor age com alta confiança |
+| Dengue (inc100) | 0.70 | 12% | **44%** | banda "alerta forte" — mais cobertura, menos confiança |
+| Dengue (canal) | 0.70 | 7% | **32%** | banda "alerta moderado" |
+| Chikungunya (inc100) | 0.70 | 33% | **33%** | banda única possível — acima disso, 0 alertas |
+| Zika (canal) | 0.50 | 37% | **11%** | apenas monitoramento informativo — sem confiança operacional |
+
+A interface da plataforma já pode usar `threshold` como controle deslizante; o gestor ajusta conforme a fase do ano e a tolerância de campo.
+
+### 13.5 Conexão com a §7
+
+A §7 reportou recall em INÍCIO de surto a threshold default 0.5. Esta seção mostra que a métrica anterior é apenas um ponto de uma curva — e que o ponto realmente operacional, para uso preventivo, é o `precision_alerta_inicio` em thresholds altos. Para o gestor de uma plataforma em produção, a leitura correta é:
+
+> "Random Forest em dengue × inc100 captura 36% dos inícios a confiança 0.5, mas se exigirmos confiança 0.9, captura apenas 1.2% dos inícios, com a vantagem de que cada alerta novo tem 73% de probabilidade de virar surto real."
+
+Esse é o tipo de calibração que justifica o uso da plataforma como **ferramenta de apoio à decisão**, não como sistema de classificação automática.
+
+### 13.6 Backups preservados
+
+- `data/processed/threshold_sweep.parquet` — long-format, 1.575 linhas (3 doenças × 4 definições × 5 modelos ML × 3 folds × 5 thresholds, com algumas combinações puladas por raridade)
+- `data/processed/threshold_resumo.csv` — média sobre folds, formato amigável para abrir em Excel

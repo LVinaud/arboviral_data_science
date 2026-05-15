@@ -243,6 +243,16 @@ def explicacao_local(
     if len(X_amostra) != 1:
         raise ValueError("Esperando exatamente uma linha em X_amostra")
 
+    # Normaliza pd.NA → np.nan: colunas Int32/Int64 nullable (ex.:
+    # `pendulares_entram_trabalho` que vem do master com NA em 2022+) usam
+    # pd.NA no lugar de np.nan, e isso quebra `float()` e `np.asarray(dtype=float)`
+    # mais à frente. Casts internos do sklearn (Imputer, StandardScaler) também
+    # esperam np.nan, então convertemos uma vez aqui na entrada.
+    X_amostra = X_amostra.apply(
+        lambda s: pd.to_numeric(s, errors="coerce") if s.dtype.kind == "O" or
+                  pd.api.types.is_extension_array_dtype(s) else s
+    )
+
     classe = _classe_clf(modelo)
     cols = list(X_amostra.columns)
     if classe in ("RandomForestClassifier", "XGBClassifier", "LGBMClassifier"):
@@ -261,10 +271,12 @@ def explicacao_local(
         )
 
     # Valor observado: lê do X_amostra alinhado às colunas usadas pelo modelo.
+    # `pd.to_numeric(..., errors='coerce')` na entrada já garantiu que pd.NA
+    # virou np.nan, mas mantemos o fallback explícito por defesa.
     valores = []
     for c in cols:
-        v = X_amostra[c].iloc[0] if c in X_amostra.columns else float("nan")
-        valores.append(v)
+        v = X_amostra[c].iloc[0] if c in X_amostra.columns else np.nan
+        valores.append(np.nan if pd.isna(v) else float(v))
     df = pd.DataFrame({
         "feature": cols,
         "valor_observado": np.asarray(valores, dtype=float),

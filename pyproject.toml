@@ -24,6 +24,7 @@ dependencies = [
     "jupyter>=1.0",
     "scipy>=1.11",      # arboviral.analyze_no_cross — Wilcoxon pareado
     "tabulate>=0.9",    # arboviral.analyze_no_cross — pivot.to_markdown()
+    "optuna>=3.5",      # arboviral.tune_optuna — Bayesian hyperparameter search
 ]
 
 [project.optional-dependencies]

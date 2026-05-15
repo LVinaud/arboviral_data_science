@@ -16,7 +16,7 @@ Este documento organiza o que vem após a finalização do pipeline atual. Divid
 | 1.2 | SHAP estratificado por perfil de município (clusters por IDH × população) | 1-2 dias | 📋 |
 | 1.3 | Análise de robustez (RQ3): simular dados faltantes 10/30/50% e medir queda de performance | 2-3 dias | 📋 |
 | 1.4 | Sensitivity analysis com `--no-cross`: quantificar ganho das features cross-doença | 1 dia | ✅ feito (2026-05-14). Análise pareada PRE × POS-Onda 2 com Wilcoxon e pivot modelo×doença. Resultado: o ganho cross-doença robusto está concentrado em **RF × chikungunya** (+0.056 Δ AUPRC); os outros cenários flutuam pequeno e em geral neutro a desfavorável (efeito médio em zika é −0.005 a −0.008, p≈0.06–0.09). A interpretação anterior baseada em SHAP global ("cross é essencial pra zika") foi corrigida — SHAP mede importância dentro do modelo cross, sensitivity mede efeito real. Detalhes em [RELATORIO_MODELAGEM.md §11](RELATORIO_MODELAGEM.md). Comparativo gerado por `arboviral.analyze_no_cross --historico`. |
-| 1.5 | Hyperparameter tuning com Optuna nos top 3 modelos | 2-3 dias | 📋 |
+| 1.5 | Hyperparameter tuning com Optuna nos top 3 modelos | 2-3 dias | ✅ feito (2026-05-15). Ampliado para **15 estudos** (3 cenários top — dengue×inc100, chik×inc100, zika×canal — × 5 modelos ML, 100 trials cada via TPE Sampler com seed 42). Validação INTERNA em `target_year=2021` para preservar folds de teste 2022/2023/2024. Avaliação final em `arboviral.train_tuned` aplicando best_params nos 3 folds oficiais. Resultado honesto: **defaults já estavam ~no teto**. Em dengue, ganho marginal (RF 0.795 → LGBM tuned 0.798, +0.4 pontos). EBM/LogReg ganharam 4–5% (gap fechando) e LogReg em chik subiu 61% (L1 forte). Mas em chik/zika com poucos positivos, TPE overfit ao fold 2021 e tuned PIORA (LGBM chik −73%, EBM chik −69%, LGBM zika −51%). **Recomendação operacional: manter RF default em produção.** Detalhes em [RELATORIO_MODELAGEM.md §12](RELATORIO_MODELAGEM.md). Backups: `data/processed/optuna_studies/*.db` (15 SQLites auditáveis), `optuna_best_params.json`, `model_results_TUNED.parquet`, `tuning_comparison.csv`. |
 | 1.6 | Explicabilidade local para EBM e LogReg (não só árvores) | 0.5 dia | ✅ feito — `explicacao_local()` despacha por tipo de modelo (SHAP / coef×valor padronizado / `explain_local` nativo do EBM) |
 
 **Resultado esperado**: IC final com 4 RQs respondidas + análise de antecipação (achado central) + relatório consolidado para defesa.
@@ -285,7 +285,7 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 | **Curto** | 1.2 SHAP estratificado | 📋 | Achado novo + interpretação rica |
 | **Curto** | 1.3 Robustez a NaN (RQ3) | 📋 | Responde RQ pendente, publicável |
 | **Curto** | 1.4 Sensitivity --no-cross | 📋 | Quantifica ganho cross-doença |
-| **Curto** | 1.5 Hyperparameter tuning | 📋 | +5% AUPRC esperado |
+| **Curto** | 1.5 Hyperparameter tuning Optuna | ✅ feito | Ganho marginal em dengue (+0.4pp); confirma defaults no teto; tuning piora chik/zika com poucos positivos |
 | **Médio** | 2.1 LIRAa | 📋 | +20% AUPRC esperado, diferencial |
 | **Médio** | 2.2 MapBiomas — uso do solo | ✅ feito | Distingue urbano/floresta/agric (drivers vetoriais distintos) |
 | **Médio** | 2.3 Cobertura ESF/APS | ✅ feito | API REST direta (sem Selenium); 132 meses harmonizados |
@@ -299,4 +299,4 @@ A IC final pode já ser estruturada nesse formato — assim o artigo fica 60% pr
 | **Longo** | 3.4 Validação externa 2º estado | 📋 | Generalização real |
 | **Longo** | Multitask multidoença | 📋 | Diferencial metodológico para journal |
 
-**Marcador de progresso geral**: 5/10 fontes do top 10 integradas + 1.1 (predições/modelos) e 1.6 (explicabilidade uniforme) feitos. Restam 5 fontes + 4 itens curtos para fechar a IC.
+**Marcador de progresso geral**: 7/10 fontes do top 10 integradas (Onda 1 + Onda 2 SIH + mobilidade pendular) + itens 1.1, 1.4, 1.5, 1.6 do curto prazo concluídos. Restam **2 itens curtos (1.2 SHAP estratificado + 1.3 robustez NaN/RQ3)** + LIRAa (aguardando LAI) + NDVI (aguardando GEE) para fechar a IC.
